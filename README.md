@@ -1,32 +1,37 @@
 # Validador de planificaciones Streamlit
 
-La aplicación permite cargar un JSON/TXT y elegir qué origen de horarios se valida:
+La aplicacion analiza los dos origenes reales de horarios del JSON:
 
 - `planned`: plan publicado.
 - `plannedDraft`: borrador generado por el planificador.
-- `plannedDraftManuallyEdited`: borrador editado manualmente.
 
-El selector aparece después de cargar el fichero y solo muestra fuentes con segmentos `WORK`. Al cambiar la selección, todo el motor se ejecuta de nuevo sobre esa fuente: turnos, restricciones, horas semanales, descansos, fines de semana y relación con ausencias. Las fuentes nunca se mezclan.
+`plannedDraftManuallyEdited` no es una lista de horarios. Es un indicador booleano asociado a cada registro persona-dia de `plannedDraft`.
 
-## Ejecución en Windows
+Cuando se selecciona `plannedDraft`, la interfaz permite filtrar:
 
-1. Descomprime el proyecto.
-2. Haz doble clic en `lanzar_app.bat`.
-3. Sube el JSON o TXT.
-4. Selecciona el origen de horarios en el panel lateral.
+- todos los borradores;
+- solo `plannedDraftManuallyEdited = true`;
+- solo `plannedDraftManuallyEdited = false`.
 
-Ejecución manual:
+## Arranque
 
 ```bash
-py -m venv .venv
-.venv\Scripts\activate
 python -m pip install -r requirements.txt
-python -m streamlit run app.py
+python -m streamlit run streamlit_app.py
 ```
 
-## Archivos
+`streamlit_app.py` es el punto de entrada recomendado. Mantiene compatibilidad con la version anterior de `app.py` y aplica el modelo corregido mediante `schedule_adapter.py`.
 
-- `app.py`: interfaz Streamlit y visualizaciones.
-- `validator_engine.py`: extracción parametrizable y motor de cálculo.
-- `MANUAL_CALCULOS.docx`: metodología completa.
-- `tests/test_schedule_sources.py`: pruebas de aislamiento entre fuentes.
+## Logica
+
+- `planned` y `plannedDraft` nunca se mezclan.
+- El filtro manual solo aplica a `plannedDraft`.
+- El dashboard muestra cobertura temporal por origen.
+- Si no existen registros editados manualmente, la opcion no aparece y se informa del recuento.
+- Todas las incidencias, horas, descansos y KPI se recalculan para el universo seleccionado.
+
+## Pruebas
+
+```bash
+pytest -q
+```
