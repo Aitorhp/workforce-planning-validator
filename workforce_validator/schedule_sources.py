@@ -11,13 +11,28 @@ MANUAL_EDIT_FILTERS = {"all": "Todos los borradores", "edited": "Solo borradores
 class SourceDetection(dict):
     """Resultado rico compatible con la interfaz Streamlit anterior.
 
-    El acceso por clave expone `sources` y `manual_edit`, mientras que `items()`
-    itera directamente por los origenes para mantener la compatibilidad con
-    `app.py` sin duplicar logica en la interfaz.
+    El acceso por clave expone ``sources`` y ``manual_edit``, mientras que
+    ``items()`` itera directamente por los origenes para mantener la
+    compatibilidad con ``app.py``.
+
+    Streamlit serializa los resultados de ``st.cache_data``. Durante la
+    reconstruccion de un ``dict`` personalizado, Python puede invocar
+    ``items()`` antes de haber restaurado la clave ``sources``. En ese estado
+    transitorio se delega en la implementacion nativa de ``dict``.
+
+    ``__reduce__`` fuerza ademas que la serializacion conserve las claves reales
+    del objeto (``sources`` y ``manual_edit``), en lugar de la vista aplanada que
+    ofrece ``items()`` a la interfaz.
     """
 
     def items(self):
-        return self["sources"].items()
+        sources = dict.get(self, "sources")
+        if sources is None:
+            return dict.items(self)
+        return sources.items()
+
+    def __reduce__(self):
+        return (type(self), (), None, None, iter(dict.items(self)))
 
 
 def validate_schedule_source(schedule_source: str) -> str:
