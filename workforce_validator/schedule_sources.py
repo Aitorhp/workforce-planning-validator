@@ -8,6 +8,18 @@ SCHEDULE_SOURCES = {"planned": "Plan publicado", "plannedDraft": "Borrador del p
 MANUAL_EDIT_FILTERS = {"all": "Todos los borradores", "edited": "Solo borradores editados manualmente", "not_edited": "Solo borradores no editados manualmente"}
 
 
+class SourceDetection(dict):
+    """Resultado rico compatible con la interfaz Streamlit anterior.
+
+    El acceso por clave expone `sources` y `manual_edit`, mientras que `items()`
+    itera directamente por los origenes para mantener la compatibilidad con
+    `app.py` sin duplicar logica en la interfaz.
+    """
+
+    def items(self):
+        return self["sources"].items()
+
+
 def validate_schedule_source(schedule_source: str) -> str:
     if schedule_source not in SCHEDULE_SOURCES:
         raise ValueError(f"Origen de horarios no valido: {schedule_source!r}. Valores: {', '.join(SCHEDULE_SOURCES)}")
@@ -33,7 +45,7 @@ def _matches(day_times: dict[str, Any], manual_filter: str) -> bool:
     return True
 
 
-def detect_schedule_sources(data: dict[str, Any]) -> dict[str, Any]:
+def detect_schedule_sources(data: dict[str, Any]) -> SourceDetection:
     sources = {key: {"person_days": 0, "segments": 0, "work_segments": 0, "dates": set()} for key in SCHEDULE_SOURCES}
     manual = {"true_person_days": 0, "false_person_days": 0, "missing_person_days": 0}
     for store_day in data.get("storeDayTimes") or []:
@@ -69,7 +81,7 @@ def detect_schedule_sources(data: dict[str, Any]) -> dict[str, Any]:
         stats["date_count"] = len(dates)
         stats["first_date"] = dates[0] if dates else None
         stats["last_date"] = dates[-1] if dates else None
-    return {"sources": sources, "manual_edit": manual}
+    return SourceDetection(sources=sources, manual_edit=manual)
 
 
 def filter_schedule_data(data: dict[str, Any], schedule_source: str, manual_filter: str = "all"):
