@@ -45,6 +45,22 @@ INCIDENT_LABELS = {
 }
 STATUS_ORDER = ["COINCIDE", "FALTAN HORAS", "EXCESO HORAS", "NO EVALUABLE", "SIN HORAS CONTRATO"]
 STATUS_COLORS = {"COINCIDE":"#22a447", "FALTAN HORAS":"#dc3545", "EXCESO HORAS":"#f59e0b", "NO EVALUABLE":"#94a3b8", "SIN HORAS CONTRATO":"#64748b"}
+WEEKLY_DIAGNOSIS_ORDER = [
+    "Contrato cubierto",
+    "Cubierto con exceso",
+    "Deficit compatible con ausencias",
+    "Deficit parcialmente compatible",
+    "Deficit sin apoyo de ausencias",
+    "Ausente todo el periodo",
+]
+WEEKLY_DIAGNOSIS_COLORS = {
+    "Contrato cubierto": "#22a447",
+    "Cubierto con exceso": "#f59e0b",
+    "Deficit compatible con ausencias": "#2563eb",
+    "Deficit parcialmente compatible": "#7c3aed",
+    "Deficit sin apoyo de ausencias": "#dc3545",
+    "Ausente todo el periodo": "#64748b",
+}
 
 
 def fmt(value, decimals=0):
@@ -116,6 +132,96 @@ def weekly_summary(weekly):
     return result.sort_values(["ano_iso", "semana_iso"])
 
 
+def prepare_weekly_analysis(weekly):
+    """Build employee and week views from the existing engine output."""
+    evaluable_statuses = ["COINCIDE", "FALTAN HORAS", "EXCESO HORAS"]
+    evaluable = weekly.loc[weekly["estado_planificacion"].isin(evaluable_statuses)].copy()
+    all_employees = weekly[["id_tienda", "personId"]].drop_duplicates()
+    if evaluable.empty:
+        return evaluable, pd.DataFrame(), pd.DataFrame(), len(all_employees)
+
+    numeric_columns = [
+        "applicableWorkingHours",
+        "horas_planificadas",
+        "horas_no_planificadas_hasta_contrato",
+        "horas_planificadas_en_exceso",
+        "horas_potenciales_asociadas_ausencia",
+        "dias_ausencia_sin_turno",
+    ]
+    for column in numeric_columns:
+        evaluable[column] = pd.to_numeric(evaluable[column], errors="coerce").fillna(0.0)
+
+    evaluable["ausente_todo"] = evaluable["ausente_todo_el_periodo"].eq("SI")
+    estimable = ~evaluable["ausente_todo"]
+    evaluable["horas_deficit_compatibles_ausencia"] = 0.0
+    evaluable.loc[estimable, "horas_deficit_compatibles_ausencia"] = pd.concat(
+        [
+            evaluable.loc[estimable, "horas_no_planificadas_hasta_contrato"],
+            evaluable.loc[estimable, "horas_potenciales_asociadas_ausencia"],
+        ],
+        axis=1,
+    ).min(axis=1)
+    evaluable["horas_deficit_sin_explicar"] = 0.0
+    evaluable.loc[estimable, "horas_deficit_sin_explicar"] = (
+        evaluable.loc[estimable, "horas_no_planificadas_hasta_contrato"]
+        - evaluable.loc[estimable, "horas_deficit_compatibles_ausencia"]
+    ).clip(lower=0.0)
+    evaluable["semana_cubierta"] = ~evaluable["estado_planificacion"].eq("FALTAN HORAS")
+    evaluable["semana_exacta"] = evaluable["estado_planificacion"].eq("COINCIDE")
+    evaluable["semana_deficit"] = evaluable["estado_planificacion"].eq("FALTAN HORAS")
+    evaluable["semana_exceso"] = evaluable["estado_planificacion"].eq("EXCESO HORAS")
+
+    grouped = evaluable.groupby(["id_tienda", "personId"], as_index=False).agg(
+        semanas_evaluables=("estado_planificacion", "size"),
+        semanas_cubiertas=("semana_cubierta", "sum"),
+        semanas_exactas=("semana_exacta", "sum"),
+        semanas_con_deficit=("semana_deficit", "sum"),
+        semanas_con_exceso=("semana_exceso", "sum"),
+        horas_contrato=("applicableWorkingHours", "sum"),
+        horas_planificadas=("horas_planificadas", "sum"),
+        horas_faltantes=("horas_no_planificadas_hasta_contrato", "sum"),
+        horas_exceso=("horas_planificadas_en_exceso", "sum"),
+        dias_ausencia_sin_turno=("dias_ausencia_sin_turno", "sum"),
+        horas_deficit_compatibles_ausencia=("horas_deficit_compatibles_ausencia", "sum"),
+        horas_deficit_sin_explicar=("horas_deficit_sin_explicar", "sum"),
+        ausente_todo_periodo=("ausente_todo", "max"),
+    )
+    grouped["cobertura_horas_periodo_pct"] = grouped.apply(
+        lambda row: pct(row["horas_planificadas"], row["horas_contrato"]), axis=1
+    )
+
+    def diagnosis(row):
+        if row["ausente_todo_periodo"]:
+            return "Ausente todo el periodo"
+        if row["semanas_con_deficit"] == 0:
+            return "Cubierto con exceso" if row["semanas_con_exceso"] else "Contrato cubierto"
+        if row["horas_deficit_compatibles_ausencia"] <= 0.01:
+            return "Deficit sin apoyo de ausencias"
+        if row["horas_deficit_sin_explicar"] <= 0.01:
+            return "Deficit compatible con ausencias"
+        return "Deficit parcialmente compatible"
+
+    grouped["diagnostico"] = grouped.apply(diagnosis, axis=1)
+    grouped = grouped.sort_values(
+        ["horas_deficit_sin_explicar", "horas_faltantes", "personId"],
+        ascending=[False, False, True],
+    )
+
+    by_week = evaluable.loc[~evaluable["ausente_todo"]].groupby(
+        ["ano_iso", "semana_iso", "inicio_semana", "fin_semana"], as_index=False
+    ).agg(
+        horas_deficit=("horas_no_planificadas_hasta_contrato", "sum"),
+        horas_compatibles_ausencia=("horas_deficit_compatibles_ausencia", "sum"),
+        horas_sin_explicar=("horas_deficit_sin_explicar", "sum"),
+        empleados_con_deficit=("semana_deficit", "sum"),
+    )
+    by_week["Semana"] = by_week.apply(lambda row: f"{int(row.ano_iso)}-S{int(row.semana_iso):02d}", axis=1)
+    by_week = by_week.sort_values(["ano_iso", "semana_iso"])
+
+    non_evaluable_employees = len(all_employees) - grouped[["id_tienda", "personId"]].drop_duplicates().shape[0]
+    return evaluable, grouped, by_week, non_evaluable_employees
+
+
 def render_summary(frames):
     shifts, summaries, incidents, weekly = frames["shifts"], frames["summaries"], frames["incidents"], frames["weekly"]
     employees = employee_compliance(summaries)
@@ -182,35 +288,172 @@ def render_restrictions(frames):
 def render_weekly(frames):
     weekly = frames["weekly"]
     st.subheader("Control de horas semanales")
-    help_text("Cada registro representa una persona y una semana ISO. Las ausencias nunca se suman a las horas planificadas; solo se muestran como posible explicacion del deficit.")
+    help_text(
+        "Esta pantalla responde a tres preguntas: cuantos empleados tienen cubiertas todas sus horas contractuales, "
+        "cuantos presentan deficit en alguna semana y que parte del deficit es compatible con ausencias registradas. "
+        "El analisis principal usa empleados unicos; el detalle conserva el nivel empleado-semana."
+    )
     if weekly.empty:
         st.warning("No hay registros semanales.")
         return
-    counts = weekly["estado_planificacion"].value_counts()
+
+    evaluable, employees, by_week, non_evaluable = prepare_weekly_analysis(weekly)
+    if employees.empty:
+        st.warning("No hay empleados evaluables: se necesitan semanas completas y horas contractuales numericas.")
+        return
+
+    covered_mask = employees["semanas_con_deficit"].eq(0)
+    deficit_mask = employees["semanas_con_deficit"].gt(0)
+    covered_employees = int(covered_mask.sum())
+    deficit_employees = int(deficit_mask.sum())
+    absent_entire = int(employees["ausente_todo_periodo"].sum())
+    total_missing = employees["horas_faltantes"].sum()
+    estimable_missing = (
+        employees.loc[~employees["ausente_todo_periodo"], "horas_deficit_compatibles_ausencia"].sum()
+        + employees.loc[~employees["ausente_todo_periodo"], "horas_deficit_sin_explicar"].sum()
+    )
+    compatible_missing = employees.loc[~employees["ausente_todo_periodo"], "horas_deficit_compatibles_ausencia"].sum()
+    compatible_pct = pct(compatible_missing, estimable_missing)
+
     cols = st.columns(5)
-    kpi(cols[0], "Coinciden", fmt(int(counts.get("COINCIDE",0))), "Contrato y plan dentro de 0,01 h", "green")
-    kpi(cols[1], "Faltan horas", fmt(int(counts.get("FALTAN HORAS",0))), f"{fmt(weekly.loc[weekly.estado_planificacion.eq('FALTAN HORAS'),'horas_no_planificadas_hasta_contrato'].sum(),1)} h", "red")
-    kpi(cols[2], "Exceso de horas", fmt(int(counts.get("EXCESO HORAS",0))), f"{fmt(weekly.loc[weekly.estado_planificacion.eq('EXCESO HORAS'),'horas_planificadas_en_exceso'].sum(),1)} h", "amber")
-    kpi(cols[3], "No evaluables", fmt(int(counts.get("NO EVALUABLE",0))), "Semanas parciales", "neutral")
-    kpi(cols[4], "Sin contrato", fmt(int(counts.get("SIN HORAS CONTRATO",0))), "Horas contractuales no numericas", "neutral")
-    left, right = st.columns([.9,1.4])
+    kpi(cols[0], "Empleados evaluables", fmt(len(employees)), f"{non_evaluable} sin semanas evaluables", "blue")
+    kpi(cols[1], "Contrato cubierto", fmt(covered_employees), pct_text(pct(covered_employees, len(employees))), "green")
+    kpi(cols[2], "Con deficit", fmt(deficit_employees), pct_text(pct(deficit_employees, len(employees))), "red")
+    kpi(cols[3], "Horas no planificadas", f"{fmt(total_missing,1)} h", "No se compensan con excesos", "red" if total_missing else "green")
+    kpi(
+        cols[4],
+        "Deficit compatible con ausencias",
+        pct_text(compatible_pct),
+        f"{fmt(compatible_missing,1)} de {fmt(estimable_missing,1)} h estimables",
+        "purple",
+    )
+
+    if absent_entire:
+        st.info(
+            f"Hay {absent_entire} empleado(s) marcados como ausentes durante todo el periodo. "
+            "Se muestran como categoria separada y no se estiman horas explicables porque no existe una jornada media planificada fiable."
+        )
+
+    left, right = st.columns([1, 1.35])
     with left:
-        st.markdown("#### Distribucion de estados")
-        help_text("Distribuye todos los registros empleado-semana, incluidos los no evaluables y los que no tienen horas contractuales.")
-        status = weekly["estado_planificacion"].value_counts().reindex(STATUS_ORDER, fill_value=0).rename_axis("Estado").reset_index(name="Registros")
-        fig = px.pie(status, names="Estado", values="Registros", hole=.55, color="Estado", color_discrete_map=STATUS_COLORS, height=360)
-        fig.update_traces(textinfo="value+percent")
+        st.markdown("#### Respuesta por empleado")
+        help_text(
+            "Un empleado aparece como 'contrato cubierto' cuando ninguna de sus semanas evaluables queda por debajo del contrato. "
+            "Los excesos se separan porque cubren el contrato, pero siguen siendo una desviacion a revisar."
+        )
+        diagnosis = employees["diagnostico"].value_counts().reindex(WEEKLY_DIAGNOSIS_ORDER, fill_value=0)
+        diagnosis = diagnosis[diagnosis.gt(0)].rename_axis("Diagnostico").reset_index(name="Empleados")
+        fig = px.bar(
+            diagnosis,
+            x="Empleados",
+            y="Diagnostico",
+            orientation="h",
+            text="Empleados",
+            color="Diagnostico",
+            color_discrete_map=WEEKLY_DIAGNOSIS_COLORS,
+            height=410,
+        )
+        fig.update_layout(showlegend=False, yaxis={"categoryorder":"array", "categoryarray":list(reversed(WEEKLY_DIAGNOSIS_ORDER))})
         st.plotly_chart(fig, use_container_width=True)
+
     with right:
-        st.markdown("#### Evolucion semanal")
-        help_text("Permite localizar en que semanas se concentran los deficits, excesos o casos no evaluables.")
-        summary = weekly_summary(weekly)
-        long = summary.melt(id_vars="Semana", value_vars=STATUS_ORDER, var_name="Estado", value_name="Registros")
-        st.plotly_chart(px.bar(long, x="Semana", y="Registros", color="Estado", barmode="stack", color_discrete_map=STATUS_COLORS, height=360), use_container_width=True)
-    st.markdown("#### Resumen por semana")
-    help_text("La tabla agrega empleados y horas por semana. Las horas faltantes y en exceso son magnitudes separadas; no se compensan entre personas.")
-    summary = weekly_summary(weekly)
-    st.dataframe(summary[["Semana","inicio_semana","fin_semana",*STATUS_ORDER,"horas_planificadas","horas_faltantes","horas_exceso"]], hide_index=True, use_container_width=True)
+        st.markdown("#### Deficit semanal: ausencia vs. pendiente de explicar")
+        help_text(
+            "Las horas compatibles con ausencia son una estimacion: dias de ausencia sin turno multiplicados por la jornada media planificada del empleado, "
+            "limitadas al deficit real. Las ausencias no se suman a las horas trabajadas. Se excluyen los ausentes todo el periodo."
+        )
+        deficit_weeks = by_week.loc[by_week["horas_deficit"].gt(0)].copy()
+        if deficit_weeks.empty:
+            st.success("No hay horas deficitarias en las semanas evaluables.")
+        else:
+            long = deficit_weeks.melt(
+                id_vars="Semana",
+                value_vars=["horas_compatibles_ausencia", "horas_sin_explicar"],
+                var_name="Tipo",
+                value_name="Horas",
+            )
+            labels = {
+                "horas_compatibles_ausencia": "Compatibles con ausencias",
+                "horas_sin_explicar": "Sin explicar por ausencias",
+            }
+            long["Tipo"] = long["Tipo"].map(labels)
+            fig = px.bar(
+                long,
+                x="Semana",
+                y="Horas",
+                color="Tipo",
+                barmode="stack",
+                color_discrete_map={
+                    "Compatibles con ausencias":"#7c3aed",
+                    "Sin explicar por ausencias":"#dc3545",
+                },
+                height=410,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("#### Empleados que requieren revision")
+    help_text(
+        "La tabla agrega todo el periodo por empleado. 'Cobertura del periodo' compara horas totales, pero la clasificacion se decide semana a semana para evitar que un exceso compense un deficit de otra semana."
+    )
+    only_deficit = st.checkbox("Mostrar solo empleados con deficit", value=True, key="weekly_only_deficit")
+    view = employees.loc[employees["semanas_con_deficit"].gt(0)].copy() if only_deficit else employees.copy()
+    view = view.rename(columns={
+        "diagnostico":"Diagnostico",
+        "semanas_evaluables":"Semanas evaluables",
+        "semanas_cubiertas":"Semanas cubiertas",
+        "semanas_con_deficit":"Semanas con deficit",
+        "semanas_con_exceso":"Semanas con exceso",
+        "horas_contrato":"Horas de contrato",
+        "horas_planificadas":"Horas planificadas",
+        "cobertura_horas_periodo_pct":"Cobertura periodo (%)",
+        "horas_faltantes":"Horas faltantes",
+        "horas_exceso":"Horas en exceso",
+        "dias_ausencia_sin_turno":"Dias de ausencia sin turno",
+        "horas_deficit_compatibles_ausencia":"Deficit compatible con ausencia (h)",
+        "horas_deficit_sin_explicar":"Deficit sin explicar (h)",
+    })
+    columns = [
+        "id_tienda", "personId", "Diagnostico", "Semanas evaluables", "Semanas cubiertas",
+        "Semanas con deficit", "Semanas con exceso", "Horas de contrato", "Horas planificadas",
+        "Cobertura periodo (%)", "Horas faltantes", "Horas en exceso", "Dias de ausencia sin turno",
+        "Deficit compatible con ausencia (h)", "Deficit sin explicar (h)",
+    ]
+    st.dataframe(
+        view[columns],
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "Cobertura periodo (%)": st.column_config.NumberColumn(format="%.1f %%"),
+            "Horas de contrato": st.column_config.NumberColumn(format="%.1f h"),
+            "Horas planificadas": st.column_config.NumberColumn(format="%.1f h"),
+            "Horas faltantes": st.column_config.NumberColumn(format="%.1f h"),
+            "Horas en exceso": st.column_config.NumberColumn(format="%.1f h"),
+            "Deficit compatible con ausencia (h)": st.column_config.NumberColumn(format="%.1f h"),
+            "Deficit sin explicar (h)": st.column_config.NumberColumn(format="%.1f h"),
+        },
+    )
+
+    with st.expander("Ver detalle empleado-semana y criterios de calculo"):
+        st.markdown(
+            """
+            - **Semana evaluable:** los siete dias de la semana estan presentes en el fichero y `applicableWorkingHours` es numerico.
+            - **Contrato cubierto:** horas planificadas iguales o superiores al contrato en todas las semanas evaluables.
+            - **Deficit compatible con ausencias:** el deficit puede quedar cubierto total o parcialmente por la estimacion de horas asociadas a dias de ausencia sin turno.
+            - **Importante:** la compatibilidad con ausencias es una señal de diagnostico, no una imputacion de horas trabajadas ni una prueba causal.
+            """
+        )
+        detail = evaluable.sort_values(["inicio_semana", "id_tienda", "personId"]).copy()
+        detail["Semana"] = detail.apply(lambda row: f"{int(row.ano_iso)}-S{int(row.semana_iso):02d}", axis=1)
+        st.dataframe(
+            detail[[
+                "Semana", "id_tienda", "personId", "applicableWorkingHours", "horas_planificadas",
+                "estado_planificacion", "horas_no_planificadas_hasta_contrato", "horas_planificadas_en_exceso",
+                "dias_ausencia_sin_turno", "tipos_ausencia", "horas_deficit_compatibles_ausencia",
+                "horas_deficit_sin_explicar", "posible_explicacion_por_ausencia",
+            ]],
+            hide_index=True,
+            use_container_width=True,
+        )
 
 
 def render_shifts(frames):
