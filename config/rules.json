@@ -1,0 +1,28 @@
+{
+  "calculation": {
+    "max_internal_break_hours": 1.0,
+    "weekly_hours_tolerance": 0.01
+  },
+  "rules": {
+    "max_consecutive_days": {
+      "enabled": true,
+      "limit": 5,
+      "incident_type": "MAS_DE_5_DIAS_CONSECUTIVOS"
+    },
+    "max_shift_hours": {
+      "enabled": true,
+      "limit": 7.5,
+      "incident_type": "TURNO_SUPERIOR_7_5H"
+    },
+    "min_shift_hours": {
+      "enabled": true,
+      "limit": 4.0,
+      "incident_type": "TURNO_INFERIOR_4H"
+    },
+    "min_rest_hours": {
+      "enabled": true,
+      "limit": 11.0,
+      "incident_type": "DESCANSO_INFERIOR_11H"
+    }
+  }
+}
