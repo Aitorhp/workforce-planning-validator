@@ -12,7 +12,7 @@ if not exist ".venv\Scripts\python.exe" (
   ".venv\Scripts\python.exe" -m pip install --upgrade pip || goto :error
   ".venv\Scripts\python.exe" -m pip install -r requirements.txt || goto :error
 )
-".venv\Scripts\python.exe" -m streamlit run app.py
+".venv\Scripts\python.exe" -m streamlit run streamlit_app.py
 exit /b 0
 :error
 echo Error durante la instalacion o el arranque.
