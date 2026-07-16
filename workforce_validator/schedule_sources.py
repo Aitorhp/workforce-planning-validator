@@ -18,8 +18,11 @@ class SourceDetection(dict):
     Streamlit serializa los resultados de ``st.cache_data``. Durante la
     reconstruccion de un ``dict`` personalizado, Python puede invocar
     ``items()`` antes de haber restaurado la clave ``sources``. En ese estado
-    transitorio se debe delegar en la implementacion nativa de ``dict`` para
-    evitar un ``KeyError``.
+    transitorio se delega en la implementacion nativa de ``dict``.
+
+    ``__reduce__`` fuerza ademas que la serializacion conserve las claves reales
+    del objeto (``sources`` y ``manual_edit``), en lugar de la vista aplanada que
+    ofrece ``items()`` a la interfaz.
     """
 
     def items(self):
@@ -27,6 +30,9 @@ class SourceDetection(dict):
         if sources is None:
             return dict.items(self)
         return sources.items()
+
+    def __reduce__(self):
+        return (type(self), (), None, None, iter(dict.items(self)))
 
 
 def validate_schedule_source(schedule_source: str) -> str:
