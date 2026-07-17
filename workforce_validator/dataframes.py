@@ -1,7 +1,37 @@
 from __future__ import annotations
 
 import pandas as pd
+
+from workforce_validator.analytics import (
+    analyze_daily_absences,
+    analyze_shift_balance,
+    classify_shift_period,
+)
 from workforce_validator.models import ValidationResult
+
+
+SHIFT_BALANCE_COLUMNS = [
+    "id_tienda",
+    "personId",
+    "turnos_manana",
+    "turnos_tarde",
+    "turnos_totales",
+    "horas_manana",
+    "horas_tarde",
+    "porcentaje_manana",
+    "porcentaje_tarde",
+    "sesgo_tarde_pct",
+    "indice_equilibrio_pct",
+    "rota_manana_tarde",
+    "estado_rotacion",
+]
+
+ABSENCE_DAILY_COLUMNS = [
+    "fecha",
+    "empleados_ausentes",
+    "registros_ausencia",
+    "tipos_ausencia",
+]
 
 
 def result_dataframes(result: ValidationResult) -> dict[str, pd.DataFrame]:
@@ -10,6 +40,7 @@ def result_dataframes(result: ValidationResult) -> dict[str, pd.DataFrame]:
         "applicableWorkingHours": s.applicable_working_hours,
         "day": s.work_day, "hora_inicio": s.shift_start, "hora_fin": s.shift_end,
         "horas_totales": s.worked_hours, "duracion_descanso": s.break_hours,
+        "franja_turno": classify_shift_period(s.shift_start),
     } for s in result.shifts])
     incidents = pd.DataFrame([{
         "id_tienda": i.store_id, "personId": i.person_id, "mes": i.month,
@@ -21,10 +52,20 @@ def result_dataframes(result: ValidationResult) -> dict[str, pd.DataFrame]:
         "id_tienda": a.store_id, "personId": a.person_id, "fecha": a.absence_day,
         "tipo_ausencia": a.absence_type, "estado": a.absence_status,
     } for a in result.absences])
+    shift_balance = pd.DataFrame(
+        analyze_shift_balance(result.shifts),
+        columns=SHIFT_BALANCE_COLUMNS,
+    )
+    absence_daily = pd.DataFrame(
+        analyze_daily_absences(result.absences, result.data_dates),
+        columns=ABSENCE_DAILY_COLUMNS,
+    )
     return {
         "shifts": shifts,
         "summaries": pd.DataFrame(result.summaries),
         "incidents": incidents,
         "weekly": pd.DataFrame(result.weekly_rows),
         "absences": absences,
+        "shift_balance": shift_balance,
+        "absence_daily": absence_daily,
     }
