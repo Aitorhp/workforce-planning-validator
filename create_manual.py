@@ -51,7 +51,7 @@ sub.runs[0].font.color.rgb = RGBColor(37, 99, 235)
 
 p = doc.add_paragraph()
 p.add_run('Versión: ').bold = True
-p.add_run('2.2 — balance de franjas y filtro semanal global')
+p.add_run('2.3 — tablas de rotación y lectura diaria mejorada')
 
 doc.add_heading('1. Selección del origen de horarios', level=1)
 doc.add_paragraph('La aplicación puede analizar tres colecciones distintas de horarios contenidas en dayTimes. El usuario selecciona una única fuente y todo el motor se ejecuta exclusivamente sobre ella. Las fuentes no se suman, concatenan ni comparan de forma implícita.')
@@ -113,14 +113,14 @@ add_table(doc, ['Concepto', 'Definición'], [
     ['Mañanas medias por semana', 'Turnos de mañana / semanas incluidas en el periodo seleccionado.'],
     ['Tardes medias por semana', 'Turnos de tarde / semanas incluidas en el periodo seleccionado.'],
 ])
-doc.add_paragraph('La gráfica principal compara dos columnas por empleado: mañanas medias por semana y tardes medias por semana. Si se selecciona una sola semana, el denominador es uno.')
+doc.add_paragraph('La vista principal es una tabla por empleado con mañanas y tardes medias por semana, totales de cada franja y estado de rotación. Los empleados con valor cero en alguna franja se ordenan primero para facilitar su identificación. Si se selecciona una sola semana, el denominador es uno.')
 
 doc.add_heading('7. Ausencias', level=1)
 doc.add_paragraph('Las ausencias se leen siempre desde dayTimes.absences, independientemente del origen horario. Solo se incluyen estados VALIDATED o APPROVED. Las horas potenciales asociadas a ausencia no se suman a la planificación; sirven únicamente como explicación del déficit.')
 doc.add_paragraph('El calendario diario cuenta empleados únicos ausentes por fecha y conserva explícitamente los días con cero ausencias. El filtro semanal limita el calendario al intervalo seleccionado.')
 
-doc.add_heading('8. Indicadores del dashboard', level=1)
-add_table(doc, ['Indicador', 'Unidad y cálculo'], [
+doc.add_heading('8. Indicadores y visualizaciones del dashboard', level=1)
+add_table(doc, ['Indicador o vista', 'Unidad y cálculo'], [
     ['Empleados', 'Personas únicas dentro del ámbito de la visualización.'],
     ['Turnos', 'Registros empleado-día con al menos un segmento WORK.'],
     ['Horas planificadas', 'Suma neta de horas de los turnos seleccionados.'],
@@ -129,6 +129,8 @@ add_table(doc, ['Indicador', 'Unidad y cálculo'], [
     ['Cumplimiento semanal', 'Registros COINCIDE / registros semanales evaluables.'],
     ['Rotan mañana y tarde', 'Empleados con al menos un turno en ambas franjas.'],
     ['Mañanas/tardes medias', 'Número de turnos de cada franja dividido por las semanas del ámbito.'],
+    ['Calendario de cobertura', 'Horas diarias representadas mediante un degradado azul claro y progresivo.'],
+    ['Evolución diaria', 'Horas planificadas por fecha; el eje X muestra L, M, X, J, V, S y D.'],
     ['Empleados ausentes por día', 'Personas únicas con ausencia validada o aprobada en cada fecha.'],
 ])
 
@@ -144,15 +146,15 @@ for text in [
     doc.add_paragraph(text, style='List Bullet')
 
 doc.add_heading('10. Uso', level=1)
-for text in [
+for index, text in enumerate([
     'Ejecutar lanzar_app.bat.',
     'Subir el fichero JSON o TXT.',
     'Seleccionar el origen de horarios en el panel lateral.',
     'Seleccionar todas las semanas o una semana ISO concreta.',
     'Comprobar en la barra lateral el periodo activo.',
     'Analizar las pestañas o descargar el Excel de detalle.',
-]:
-    doc.add_paragraph(text, style='List Number')
+], start=1):
+    doc.add_paragraph(f'{index}. {text}')
 
 doc.save(OUT)
 print(OUT)
