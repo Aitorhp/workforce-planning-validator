@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.0 - 2026-07-17
+
+- Sustituye la gráfica de medias de mañana y tarde por una tabla operativa por empleado.
+- Ordena primero los empleados sin mañanas o sin tardes para facilitar su identificación.
+- Aclara el degradado del calendario de cobertura diaria.
+- Añade las iniciales L, M, X, J, V, S y D al eje X de la evolución diaria.
+- Actualiza y regenera el manual funcional.
+
 ## 2.2.0 - 2026-07-17
 
 - Sustituye el gráfico de sesgo mañana/tarde por una comparación de mañanas y tardes medias por semana y empleado.
