@@ -5,7 +5,7 @@ import sys
 
 import schedule_adapter
 
-# Mantiene la fachada corregida del motor y aplica las capas de presentación
-# especializadas en control contractual, cobertura, rotación y ausencias.
+# Mantiene la fachada corregida del motor y aplica todas las capas visuales
+# acumuladas en esta rama, incluidas las extensiones de fines de semana.
 sys.modules["validator_engine"] = schedule_adapter
-runpy.run_path("dashboard_patch_v3.py", run_name="__main__")
+runpy.run_path("dashboard_final.py", run_name="__main__")
