@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.3.0 - 2026-07-17
+
+- Sustituye la gráfica de medias de mañana y tarde por una tabla operativa por empleado.
+- Ordena primero los empleados sin mañanas o sin tardes para facilitar su identificación.
+- Aclara el degradado del calendario de cobertura diaria.
+- Añade las iniciales L, M, X, J, V, S y D al eje X de la evolución diaria.
+- Actualiza y regenera el manual funcional.
+
+## 2.2.0 - 2026-07-17
+
+- Sustituye el gráfico de sesgo mañana/tarde por una comparación de mañanas y tardes medias por semana y empleado.
+- Añade un selector global de semana en el panel lateral.
+- El filtro semanal se aplica a turnos, horas contractuales, cobertura diaria, balance de franjas, ausencias e incidencias.
+- Mantiene sin reinterpretar los resúmenes cuya unidad original es empleado-mes.
+- Actualiza el generador del manual funcional con el balance de franjas, el filtro semanal y la explicación de déficits por ausencias.
+
+## 2.1.0 - 2026-07-17
+
+- Añade el balance de turnos de mañana y tarde con corte a las 13:00.
+- Incorpora el índice de equilibrio y la identificación de empleados sin rotación.
+- Añade el calendario diario de ausencias y el diagnóstico contractual asociado a ausencias.
+
 ## 1.1.0 - 2026-07-16
 
 - Modulariza el motor en el paquete `workforce_validator`.
