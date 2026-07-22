@@ -46,6 +46,22 @@ def render_rules_panel():
         st.caption("Hacer estos valores editables requerirá configuración por sesión, validación de rangos, invalidación de caché y trazabilidad en exportaciones.")
 
 
+def render_weekend_employee_table(data, empty_message):
+    if data.empty:
+        st.info(empty_message)
+        return
+    view = data.rename(columns={
+        "id_tienda": "Tienda",
+        "personId": "Empleado",
+        "applicableWorkingHours": "Horas contrato",
+        "fines_semana_libres": "Fines de semana completos libres",
+        "sabados_libres": "Sábados libres",
+        "domingos_libres": "Domingos libres",
+    })
+    columns = ["Tienda", "Empleado", "Horas contrato", "Fines de semana completos libres", "Sábados libres", "Domingos libres"]
+    st.dataframe(view[columns], hide_index=True, use_container_width=True)
+
+
 def render_weekends(frames, data_dates):
     st.subheader("Fines de semana y rotación de descansos")
     help_text("Un fin de semana libre exige no trabajar ni el sábado ni el domingo. Sábados y domingos libres también se cuentan por separado, por empleado y mes.")
@@ -53,24 +69,58 @@ def render_weekends(frames, data_dates):
     if monthly.empty:
         st.warning("No hay información suficiente para calcular fines de semana.")
         return
-    maximum = float(monthly["applicableWorkingHours"].dropna().max()) if monthly["applicableWorkingHours"].notna().any() else 40.0
-    minimum = st.number_input("Horas contractuales mínimas", min_value=0.0, max_value=max(80.0, maximum), value=30.0, step=1.0)
-    filtered = monthly.loc[monthly["applicableWorkingHours"].ge(minimum)].copy()
-    if filtered.empty:
-        st.warning("No hay empleados que cumplan el filtro contractual.")
+
+    available_hours = monthly["applicableWorkingHours"].dropna()
+    observed_maximum = float(available_hours.max()) if not available_hours.empty else 40.0
+    filter_limit = max(80.0, observed_maximum)
+    filter_cols = st.columns(2)
+    minimum = filter_cols[0].number_input(
+        "Horas contractuales mínimas",
+        min_value=0.0,
+        max_value=filter_limit,
+        value=min(30.0, filter_limit),
+        step=1.0,
+        key="weekend_min_contract_hours",
+    )
+    maximum = filter_cols[1].number_input(
+        "Horas contractuales máximas",
+        min_value=0.0,
+        max_value=filter_limit,
+        value=filter_limit,
+        step=1.0,
+        key="weekend_max_contract_hours",
+    )
+    if minimum > maximum:
+        st.warning("Las horas mínimas no pueden ser superiores a las horas máximas.")
         return
+
+    filtered = monthly.loc[monthly["applicableWorkingHours"].between(minimum, maximum, inclusive="both")].copy()
+    if filtered.empty:
+        st.warning("No hay empleados que cumplan el rango contractual seleccionado.")
+        return
+
     keys = filtered[["id_tienda", "personId"]].drop_duplicates()
     weekends = weekends.merge(keys, on=["id_tienda", "personId"], how="inner") if not weekends.empty else weekends
-    employees = filtered.groupby(["id_tienda", "personId"], as_index=False).agg(fines_semana_libres=("fines_semana_libres", "sum"), sabados_libres=("sabados_libres", "sum"), domingos_libres=("domingos_libres", "sum"))
+    employees = filtered.groupby(["id_tienda", "personId"], as_index=False).agg(
+        applicableWorkingHours=("applicableWorkingHours", "max"),
+        fines_semana_libres=("fines_semana_libres", "sum"),
+        sabados_libres=("sabados_libres", "sum"),
+        domingos_libres=("domingos_libres", "sum"),
+    )
     no_weekend = employees["fines_semana_libres"].eq(0)
     no_sat = employees["sabados_libres"].eq(0)
     no_sun = employees["domingos_libres"].eq(0)
+    no_weekend_no_sat = no_weekend & no_sat
+    no_weekend_no_sun = no_weekend & no_sun
+    no_weekend_no_day = no_weekend & no_sat & no_sun
+
     cols = st.columns(5)
-    kpi(cols[0], "Empleados analizados", fmt(len(employees)), f"Contrato ≥ {fmt(minimum, 0)} h", "blue")
+    kpi(cols[0], "Empleados analizados", fmt(len(employees)), f"Contrato entre {fmt(minimum, 0)} y {fmt(maximum, 0)} h", "blue")
     kpi(cols[1], "Sin fin de semana libre", fmt(int(no_weekend.sum())), pct_text(pct(no_weekend.sum(), len(employees))), "red" if no_weekend.any() else "green")
-    kpi(cols[2], "Sin sábado libre", fmt(int(no_sat.sum())), pct_text(pct(no_sat.sum(), len(employees))), "red" if no_sat.any() else "green")
-    kpi(cols[3], "Sin domingo libre", fmt(int(no_sun.sum())), pct_text(pct(no_sun.sum(), len(employees))), "red" if no_sun.any() else "green")
-    kpi(cols[4], "Media fines de semana libres", fmt(filtered["fines_semana_libres"].mean(), 2), "Por empleado-mes", "purple")
+    kpi(cols[2], "Sin sábado libre", fmt(int(no_weekend_no_sat.sum())), "Entre quienes no libran un fin de semana completo", "red" if no_weekend_no_sat.any() else "green")
+    kpi(cols[3], "Sin domingo libre", fmt(int(no_weekend_no_sun.sum())), "Entre quienes no libran un fin de semana completo", "red" if no_weekend_no_sun.any() else "green")
+    kpi(cols[4], "Sin sábado ni domingo", fmt(int(no_weekend_no_day.sum())), "No libran ningún día de fin de semana", "red" if no_weekend_no_day.any() else "green")
+
     if not weekends.empty:
         st.markdown("#### Rotación por fin de semana")
         rotation = weekends.groupby(["inicio_fin_semana", "Fin de semana"], as_index=False).agg(fin_semana_completo=("fin_semana_libre", "sum"), sabado_libre=("sabado_libre", "sum"), domingo_libre=("domingo_libre", "sum")).sort_values("inicio_fin_semana")
@@ -88,6 +138,24 @@ def render_weekends(frames, data_dates):
         fig = go.Figure(go.Heatmap(z=matrix.to_numpy(), x=matrix.columns, y=matrix.index, zmin=0, zmax=2, colorscale=[[0,"#cbd5e1"],[0.49,"#cbd5e1"],[0.5,"#93c5fd"],[0.74,"#93c5fd"],[0.75,"#1d4ed8"],[1,"#1d4ed8"]], colorbar={"tickvals":[0,1,2],"ticktext":["0 días","1 día","2 días"]}))
         fig.update_layout(height=min(900, max(340, 130 + 23 * len(matrix))))
         st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("#### Diagnóstico rápido de empleados sin fin de semana completo")
+    help_text("Las pestañas parten únicamente de empleados que no tienen ningún sábado y domingo libres en el mismo fin de semana durante el periodo analizado.")
+    diagnostic_tabs = st.tabs([
+        f"Todos ({int(no_weekend.sum())})",
+        f"Sin sábados ({int(no_weekend_no_sat.sum())})",
+        f"Sin domingos ({int(no_weekend_no_sun.sum())})",
+        f"Sin ningún día ({int(no_weekend_no_day.sum())})",
+    ])
+    with diagnostic_tabs[0]:
+        render_weekend_employee_table(employees.loc[no_weekend].sort_values(["fines_semana_libres", "sabados_libres", "domingos_libres", "personId"]), "Todos los empleados tienen al menos un fin de semana completo libre.")
+    with diagnostic_tabs[1]:
+        render_weekend_employee_table(employees.loc[no_weekend_no_sat].sort_values(["domingos_libres", "personId"]), "No hay empleados sin fin de semana completo que además carezcan de sábados libres.")
+    with diagnostic_tabs[2]:
+        render_weekend_employee_table(employees.loc[no_weekend_no_sun].sort_values(["sabados_libres", "personId"]), "No hay empleados sin fin de semana completo que además carezcan de domingos libres.")
+    with diagnostic_tabs[3]:
+        render_weekend_employee_table(employees.loc[no_weekend_no_day].sort_values("personId"), "No hay empleados que trabajen todos los sábados y domingos del periodo.")
+
     st.markdown("#### Resumen empleado-mes")
     alerts_only = st.checkbox("Mostrar solo empleado-mes con algún contador a cero", value=True, key="weekend_only_alerts")
     view = filtered.copy()
