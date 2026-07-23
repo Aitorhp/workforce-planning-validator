@@ -99,7 +99,7 @@ def render_weekends(frames, data_dates):
         st.warning("No hay empleados que cumplan el rango contractual seleccionado.")
         return
 
-    keys = filtered[["id_tienda", "personId"]].drop_duplicates()
+    keys = filtered[["id_tienda", "personId", "applicableWorkingHours"]].drop_duplicates(["id_tienda", "personId"])
     weekends = weekends.merge(keys, on=["id_tienda", "personId"], how="inner") if not weekends.empty else weekends
     employees = filtered.groupby(["id_tienda", "personId"], as_index=False).agg(
         applicableWorkingHours=("applicableWorkingHours", "max"),
@@ -131,12 +131,13 @@ def render_weekends(frames, data_dates):
         fig.update_layout(height=390, xaxis_title="Fin de semana", yaxis_title="Empleados libres", hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
         st.markdown("#### Mapa empleado-fin de semana")
-        weekends["Empleado"] = weekends["id_tienda"].astype(str) + " · " + weekends["personId"].astype(str)
+        contract_text = weekends["applicableWorkingHours"].map(lambda value: f"{value:g}" if pd.notna(value) else "—")
+        weekends["Empleado"] = weekends["id_tienda"].astype(str) + " · " + weekends["personId"].astype(str) + " · " + contract_text + " h"
         weekends["dias_libres"] = weekends["sabado_libre"].astype(int) + weekends["domingo_libre"].astype(int)
         order = weekends[["inicio_fin_semana", "Fin de semana"]].drop_duplicates().sort_values("inicio_fin_semana")["Fin de semana"].tolist()
         matrix = weekends.pivot_table(index="Empleado", columns="Fin de semana", values="dias_libres", aggfunc="first").reindex(columns=order)
-        fig = go.Figure(go.Heatmap(z=matrix.to_numpy(), x=matrix.columns, y=matrix.index, zmin=0, zmax=2, colorscale=[[0,"#cbd5e1"],[0.49,"#cbd5e1"],[0.5,"#93c5fd"],[0.74,"#93c5fd"],[0.75,"#1d4ed8"],[1,"#1d4ed8"]], colorbar={"tickvals":[0,1,2],"ticktext":["0 días","1 día","2 días"]}))
-        fig.update_layout(height=min(900, max(340, 130 + 23 * len(matrix))))
+        fig = go.Figure(go.Heatmap(z=matrix.to_numpy(), x=matrix.columns, y=matrix.index, zmin=0, zmax=2, ygap=1, colorscale=[[0,"#cbd5e1"],[0.49,"#cbd5e1"],[0.5,"#93c5fd"],[0.74,"#93c5fd"],[0.75,"#1d4ed8"],[1,"#1d4ed8"]], colorbar={"tickvals":[0,1,2],"ticktext":["0 días","1 día","2 días"]}))
+        fig.update_layout(height=min(900, max(340, 130 + 23 * len(matrix))), plot_bgcolor="#000000")
         st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("#### Diagnóstico rápido de empleados sin fin de semana completo")
@@ -173,4 +174,20 @@ def render_weekends(frames, data_dates):
     source = source.replace('st.sidebar.caption(f"Fichero: {uploaded.name}")', 'st.sidebar.caption(f"Fichero: {uploaded.name}")\nrender_rules_panel()')
     source = source.replace('help_text("Rojo significa deficit, blanco coincidencia y ambar exceso. Cada celda son horas planificadas menos horas de contrato.")', 'help_text("Rojo significa déficit, blanco coincidencia y ámbar exceso. Un ✓ identifica una desviación total o parcialmente explicable por ausencias.")')
     source = source.replace('text = [["" if pd.isna(value) else f"{value:+.1f}" for value in row] for row in pivot.to_numpy()]', 'explainable = set(zip(detail.loc[detail["posible_explicacion_por_ausencia"].astype(str).str.contains("PODRIA EXPLICAR", case=False, na=False), "Empleado"], detail.loc[detail["posible_explicacion_por_ausencia"].astype(str).str.contains("PODRIA EXPLICAR", case=False, na=False), "Semana"]))\n        text = [["" if pd.isna(value) else f"{value:+.1f}{\' ✓\' if (pivot.index[i], pivot.columns[j]) in explainable else \'\'}" for j, value in enumerate(row)] for i, row in enumerate(pivot.to_numpy())]')
+    source = source.replace(
+        '        horas_exceso=("horas_planificadas_en_exceso", "sum"),\n    ).sort_values(["ano_iso", "semana_iso"])',
+        '        horas_exceso=("horas_planificadas_en_exceso", "sum"),\n        horas_ausencia_estimadas=("horas_potenciales_asociadas_ausencia", "sum"),\n    ).sort_values(["ano_iso", "semana_iso"])'
+    )
+    source = source.replace(
+        'help_text("Deficit y exceso aparecen en barras separadas, sin apilar ni compensar.")',
+        'help_text("Déficit, exceso y horas estimadas de ausencia aparecen en barras separadas, sin apilar ni compensar. La estimación de ausencia no se suma a las horas trabajadas.")'
+    )
+    source = source.replace(
+        '        fig.add_trace(go.Bar(x=summary["Semana"], y=summary["horas_exceso"], name="Horas en exceso", marker_color="#f59e0b"))',
+        '        fig.add_trace(go.Bar(x=summary["Semana"], y=summary["horas_exceso"], name="Horas en exceso", marker_color="#f59e0b"))\n        fig.add_trace(go.Bar(x=summary["Semana"], y=summary["horas_ausencia_estimadas"], name="Horas estimadas de ausencia", marker_color="#7c3aed"))'
+    )
+    source = source.replace(
+        '        st.plotly_chart(fig, use_container_width=True)\n    st.markdown("#### Mapa de desviacion empleado-semana")',
+        '        st.plotly_chart(fig, use_container_width=True)\n        sin_estimacion = detail["posible_explicacion_por_ausencia"].isin(["AUSENCIA SIN MEDIA CALCULABLE", "AUSENTE TODO EL PERIODO"])\n        if sin_estimacion.any():\n            st.warning(f"Hay {int(sin_estimacion.sum())} empleado-semana con ausencia sin una estimación fiable de horas; su valor no se incorpora a la barra de ausencias.")\n    st.markdown("#### Mapa de desviacion empleado-semana")'
+    )
     return source
