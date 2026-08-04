@@ -7,30 +7,26 @@ from workforce_validator.analytics import (
     analyze_shift_balance,
     classify_shift_period,
 )
+from workforce_validator.contracts import analyze_contract_changes
 from workforce_validator.models import ValidationResult
 
 
 SHIFT_BALANCE_COLUMNS = [
-    "id_tienda",
-    "personId",
-    "turnos_manana",
-    "turnos_tarde",
-    "turnos_totales",
-    "horas_manana",
-    "horas_tarde",
-    "porcentaje_manana",
-    "porcentaje_tarde",
-    "sesgo_tarde_pct",
-    "indice_equilibrio_pct",
-    "rota_manana_tarde",
-    "estado_rotacion",
+    "id_tienda", "personId", "turnos_manana", "turnos_central", "turnos_tarde",
+    "turnos_totales", "horas_manana", "horas_central", "horas_tarde",
+    "porcentaje_manana", "porcentaje_central", "porcentaje_tarde",
+    "sesgo_tarde_pct", "indice_equilibrio_pct", "rota_manana_tarde",
+    "cubre_tres_franjas", "estado_rotacion",
+]
+
+CONTRACT_CHANGE_COLUMNS = [
+    "id_tienda", "personId", "mes_anterior", "horas_mes_anterior",
+    "mes_posterior", "horas_mes_posterior", "variacion_horas",
+    "detalle_contrato", "requiere_revision",
 ]
 
 ABSENCE_DAILY_COLUMNS = [
-    "fecha",
-    "empleados_ausentes",
-    "registros_ausencia",
-    "tipos_ausencia",
+    "fecha", "empleados_ausentes", "registros_ausencia", "tipos_ausencia",
 ]
 
 
@@ -53,8 +49,10 @@ def result_dataframes(result: ValidationResult) -> dict[str, pd.DataFrame]:
         "tipo_ausencia": a.absence_type, "estado": a.absence_status,
     } for a in result.absences])
     shift_balance = pd.DataFrame(
-        analyze_shift_balance(result.shifts),
-        columns=SHIFT_BALANCE_COLUMNS,
+        analyze_shift_balance(result.shifts), columns=SHIFT_BALANCE_COLUMNS,
+    )
+    contract_changes = pd.DataFrame(
+        analyze_contract_changes(result.employee_months), columns=CONTRACT_CHANGE_COLUMNS,
     )
     absence_daily = pd.DataFrame(
         analyze_daily_absences(result.absences, result.data_dates),
@@ -67,5 +65,6 @@ def result_dataframes(result: ValidationResult) -> dict[str, pd.DataFrame]:
         "weekly": pd.DataFrame(result.weekly_rows),
         "absences": absences,
         "shift_balance": shift_balance,
+        "contract_changes": contract_changes,
         "absence_daily": absence_daily,
     }
