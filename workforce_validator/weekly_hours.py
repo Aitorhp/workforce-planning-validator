@@ -5,8 +5,30 @@ from datetime import date, timedelta
 from typing import Any
 
 from workforce_validator.config import SETTINGS, ValidatorSettings
-from workforce_validator.dates import daterange, week_start
+from workforce_validator.dates import daterange, month_key, week_start
 from workforce_validator.models import AbsenceDay, ShiftRow
+
+
+def _contract_for_week(
+    employee_months: dict[tuple[Any, Any, str], Any],
+    store_id: Any,
+    person_id: Any,
+    week_days: set[date],
+    data_dates: set[date],
+) -> tuple[float | None, str, str]:
+    months = sorted({month_key(day) for day in week_days & data_dates})
+    raw = [(month, employee_months.get((store_id, person_id, month))) for month in months]
+    informed = [(month, value) for month, value in raw if value not in (None, "")]
+    normalized = {str(value).strip() for _, value in informed}
+    detail = "; ".join(f"{month}: {value}" for month, value in raw)
+    if len(normalized) > 1:
+        return None, "CAMBIO CONTRATO", detail
+    if not informed:
+        return None, "SIN HORAS CONTRATO", detail
+    try:
+        return float(informed[-1][1]), "OK", detail
+    except (TypeError, ValueError):
+        return None, "SIN HORAS CONTRATO", detail
 
 
 def analyze_weekly_hours(shifts: list[ShiftRow], employee_months: dict[tuple[Any, Any, str], Any], data_dates: set[date], absences: list[AbsenceDay], employee_presence_dates: dict[tuple[Any, Any], set[date]], settings: ValidatorSettings = SETTINGS) -> list[dict[str, Any]]:
@@ -14,18 +36,16 @@ def analyze_weekly_hours(shifts: list[ShiftRow], employee_months: dict[tuple[Any
     hours_by_week = defaultdict(float)
     hours_by_employee = defaultdict(list)
     worked_days = defaultdict(set)
-    applicable_by_employee = {}
+    employees = {(store_id, person_id) for store_id, person_id, _ in employee_months}
     absences_by_day = defaultdict(set)
-    for (store_id, person_id, _), applicable in employee_months.items():
-        applicable_by_employee[(store_id, person_id)] = applicable
     for shift in shifts:
         employee = (shift.store_id, shift.person_id)
+        employees.add(employee)
         hours_by_week[(shift.store_id, shift.person_id, week_start(shift.work_day))] += shift.worked_hours
         hours_by_employee[employee].append(shift.worked_hours)
         worked_days[employee].add(shift.work_day)
-        if shift.applicable_working_hours not in (None, ""):
-            applicable_by_employee[employee] = shift.applicable_working_hours
     for absence in absences:
+        employees.add((absence.store_id, absence.person_id))
         absences_by_day[(absence.store_id, absence.person_id, absence.absence_day)].add(absence.absence_type)
     if not data_dates:
         return []
@@ -33,7 +53,7 @@ def analyze_weekly_hours(shifts: list[ShiftRow], employee_months: dict[tuple[Any
     last_week = week_start(max(data_dates))
     week_starts = [day for day in daterange(first_week, last_week) if day.weekday() == 0]
     rows = []
-    for (store_id, person_id), applicable in sorted(applicable_by_employee.items(), key=lambda item: (str(item[0][0]), str(item[0][1]))):
+    for store_id, person_id in sorted(employees, key=lambda item: (str(item[0]), str(item[1]))):
         employee = (store_id, person_id)
         values = hours_by_employee.get(employee, [])
         average_daily = round(sum(values) / len(values), 4) if values else None
@@ -46,10 +66,9 @@ def analyze_weekly_hours(shifts: list[ShiftRow], employee_months: dict[tuple[Any
             covered = len(week_days & data_dates)
             complete = covered == 7
             planned = round(hours_by_week.get((store_id, person_id, monday), 0.0), 4)
-            try:
-                contracted = float(applicable)
-            except (TypeError, ValueError):
-                contracted = None
+            contracted, contract_state, contract_detail = _contract_for_week(
+                employee_months, store_id, person_id, week_days, data_dates
+            )
             difference = round(planned - contracted, 4) if contracted is not None else None
             missing = round(max(contracted - planned, 0.0), 4) if contracted is not None else None
             excess = round(max(planned - contracted, 0.0), 4) if contracted is not None else None
@@ -58,6 +77,8 @@ def analyze_weekly_hours(shifts: list[ShiftRow], employee_months: dict[tuple[Any
             potential = round(len(absence_days) * average_daily, 4) if average_daily is not None else None
             if not complete:
                 status = "NO EVALUABLE"
+            elif contract_state == "CAMBIO CONTRATO":
+                status = "CAMBIO CONTRATO"
             elif contracted is None:
                 status = "SIN HORAS CONTRATO"
             elif abs(difference) <= tolerance:
@@ -87,6 +108,8 @@ def analyze_weekly_hours(shifts: list[ShiftRow], employee_months: dict[tuple[Any
                 "dias_cubiertos_fichero": covered,
                 "semana_completa_en_fichero": "SI" if complete else "NO",
                 "applicableWorkingHours": contracted,
+                "estado_contrato_semana": contract_state,
+                "detalle_contrato_semana": contract_detail,
                 "horas_planificadas": planned,
                 "diferencia_planificadas_menos_contrato": difference,
                 "horas_no_planificadas_hasta_contrato": missing,
