@@ -5,6 +5,7 @@ from workforce_validator.config import SETTINGS
 from workforce_validator.dataframes import result_dataframes
 from workforce_validator.engine import run_validation
 from workforce_validator.excel import build_excel_bytes
+from workforce_validator.html_report import build_html_report, build_weekend_map_component
 from workforce_validator.io import load_json_bytes
 from workforce_validator.multi_file import combine_planning_documents
 from workforce_validator.schedule_sources import (
@@ -22,5 +23,6 @@ __all__ = [
     "MAX_CONSECUTIVE_DAYS", "MAX_SHIFT_HOURS", "MIN_REST_HOURS",
     "MIN_SHIFT_HOURS", "SCHEDULE_SOURCES", "MANUAL_EDIT_FILTERS",
     "load_json_bytes", "combine_planning_documents", "result_dataframes",
-    "build_excel_bytes", "detect_schedule_sources", "run_validation",
+    "build_excel_bytes", "build_html_report", "build_weekend_map_component",
+    "detect_schedule_sources", "run_validation",
 ]
