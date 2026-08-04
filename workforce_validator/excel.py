@@ -15,9 +15,11 @@ def build_excel_bytes(result: ValidationResult) -> bytes:
     workbook.remove(workbook.active)
     sheet_map = {
         "shifts": "Turnos",
+        "shift_balance": "Balance franjas",
         "summaries": "Validacion mensual",
         "incidents": "Detalle incidencias",
         "weekly": "Control horas semanal",
+        "contract_changes": "Cambios contrato",
         "absences": "Ausencias",
     }
     for key, sheet_name in sheet_map.items():
@@ -44,6 +46,8 @@ def build_excel_bytes(result: ValidationResult) -> bytes:
     info = workbook.create_sheet("Informacion", 0)
     info.append(["Origen analizado", result.schedule_source])
     info.append(["Descripcion", SCHEDULE_SOURCES[result.schedule_source]])
+    info.append(["Clasificacion por defecto", "Mañana antes de 11:00; central 11:00-14:00; tarde después de 14:00"])
+    info.append(["Cambios contractuales", "Las semanas con valores distintos entre meses se marcan CAMBIO CONTRATO y no se evalúan"])
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
