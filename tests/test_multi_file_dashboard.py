@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from contract_shift_dashboard import apply_contract_shift_support
 from dashboard_extensions import apply_extensions
 from multi_file_dashboard import apply_multi_file_support
 
@@ -23,8 +24,13 @@ def test_dashboard_source_supports_two_files_and_compiles():
 
     source = apply_extensions(namespace["source"])
     source = apply_multi_file_support(source)
+    source = apply_contract_shift_support(source)
 
     compile(source, "app.py", "exec")
     assert "accept_multiple_files=True" in source
     assert "combine_planning_documents" in source
     assert "Periodo combinado" in source
+    assert "shift_balance_morning_cutoff" in source
+    assert "shift_balance_afternoon_cutoff" in source
+    assert "turnos_central" in source
+    assert "Cambios de horas contractuales entre meses consecutivos" in source
