@@ -5,6 +5,7 @@ from pathlib import Path
 
 from contract_shift_dashboard import apply_contract_and_shift_band_support
 from dashboard_extensions import apply_extensions
+from dashboard_source_fixes import relocate_html_download_block
 from multi_file_dashboard import apply_multi_file_support
 
 
@@ -25,6 +26,7 @@ def test_dashboard_source_supports_two_files_contract_review_three_bands_and_com
     source = apply_extensions(namespace["source"])
     source = apply_multi_file_support(source)
     source = apply_contract_and_shift_band_support(source)
+    source = relocate_html_download_block(source)
 
     compile(source, "app.py", "exec")
     assert "accept_multiple_files=True" in source
@@ -36,3 +38,6 @@ def test_dashboard_source_supports_two_files_contract_review_three_bands_and_com
     assert "Cambios de horas contractuales entre meses" in source
     assert "Descargar informe HTML" in source
     assert "build_html_report" in source
+
+    empty_upload_block = source.split("if not uploaded_files:", 1)[1].split("file_payloads =", 1)[0]
+    assert "period_start =" not in empty_upload_block
