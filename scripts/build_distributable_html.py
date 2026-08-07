@@ -40,7 +40,10 @@ PAYLOAD_FILES = [
     "reference_payload_8_4.js",
 ]
 
-PAYLOAD_RE = re.compile(r'\+?="([A-Za-z0-9+/=]+)";?\s*$')
+# Todos los fragmentos terminan con el chunk Base64 entre comillas. El primero
+# inicializa window.__WFV_PAYLOAD y los siguientes usan +=, así que no se debe
+# depender del operador de asignación para extraer el contenido.
+PAYLOAD_RE = re.compile(r'"([A-Za-z0-9+/=]+)";?\s*$')
 
 
 def read_payload() -> str:
