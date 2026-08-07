@@ -28,6 +28,13 @@ A partir de esta versión, cualquier cambio funcional o de presentación que afe
 
 La lógica de negocio principal debe permanecer en el paquete Python `workforce_validator` siempre que sea posible. Cuando el HTML replique cálculos en JavaScript, los cambios deben mantenerse en paridad con el comportamiento de la aplicación Streamlit y cubrirse con las comprobaciones de paridad existentes o equivalentes.
 
-## Referencia importada
+## Iteración actual
 
-SHA-256 del HTML fuente incorporado: `e3f19d2603bede97523751948e03cca18e8e8569a39004cf319413c1017091c2`.
+La versión actual incorpora:
+
+- exclusión de semanas completamente vacías de planificación en los análisis temporales;
+- horas contractuales visibles en las tablas de empleado/tienda y orden descendente por contrato;
+- descarga XLSX de las tablas visibles en HTML;
+- reglas editables para fines de semana completos, sábados y domingos libres, recalculadas al modificar sus parámetros.
+
+SHA-256 del HTML fuente reconstruido: `f70cb40696250e6b7cdfe70fd9875db82070497a3e709b1cabb1e381e746b650`.
