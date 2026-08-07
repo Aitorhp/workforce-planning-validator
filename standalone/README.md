@@ -2,7 +2,7 @@
 
 La versión de navegador de referencia se lanza desde `../validador_completo_dos_meses.html`.
 
-El lanzador reconstruye el HTML de referencia a partir de `../html_assets/reference_payload_1.js` a `reference_payload_8.js`. Estos assets contienen comprimido el HTML autónomo entregado como referencia y permiten mantenerlo versionado junto a la aplicación Streamlit.
+El lanzador reconstruye el HTML de referencia a partir de los ficheros `../html_assets/reference_payload_*.js`. Estos assets contienen comprimido el HTML autónomo entregado como referencia y permiten mantenerlo versionado junto a la aplicación Streamlit.
 
 Para distribuir esta versión de navegador deben conservarse juntos el fichero `validador_completo_dos_meses.html` y el directorio `html_assets`. No requiere servidor, instalación de Python ni ejecución de Streamlit.
 
