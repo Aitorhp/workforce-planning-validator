@@ -30,7 +30,7 @@ def _standalone_html() -> str:
     for name in REFERENCE_PAYLOADS:
         path = Path("html_assets") / name
         text = path.read_text(encoding="utf-8").strip()
-        match = re.search(r'\+?="([A-Za-z0-9+/=]+)";?\s*$', text)
+        match = re.search(r'"([A-Za-z0-9+/=]+)";?\s*$', text)
         assert match, f"Formato de paquete no válido: {path}"
         payload += match.group(1)
     return gzip.decompress(base64.b64decode(payload)).decode("utf-8")
