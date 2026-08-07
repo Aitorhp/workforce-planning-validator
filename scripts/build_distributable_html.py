@@ -79,3 +79,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# Touch intencionado: este fichero forma parte del trigger que regenera el HTML distribuible.
