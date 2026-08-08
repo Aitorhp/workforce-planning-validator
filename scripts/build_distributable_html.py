@@ -81,8 +81,15 @@ def patch_contract_hours_heatmap(source: str) -> str:
         source,
         'f:{ wkDev:true, wkStatus:null,',
         'f:{ wkDev:true, wkNeutralizeAbs:false, wkStatus:null,',
-        expected=2,
-        label="estado del filtro",
+        expected=1,
+        label="estado inicial del filtro",
+    )
+    source = _replace(
+        source,
+        'S.f={ wkDev:true, wkStatus:null,',
+        'S.f={ wkDev:true, wkNeutralizeAbs:false, wkStatus:null,',
+        expected=1,
+        label="reinicio del filtro",
     )
 
     source = _replace(
