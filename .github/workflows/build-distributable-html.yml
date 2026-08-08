@@ -27,7 +27,7 @@ jobs:
 
       - name: Commit regenerated distributable
         run: |
-          if git diff --quiet -- validador_distribuible.html standalone/source_diagnostic.txt; then
+          if [ -z "$(git status --porcelain -- validador_distribuible.html standalone/source_diagnostic.txt)" ]; then
             echo 'Generated files are already up to date.'
             exit 0
           fi
