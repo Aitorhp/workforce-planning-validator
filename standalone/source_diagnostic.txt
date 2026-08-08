@@ -1,0 +1,677 @@
+MARKER 'Mapa de desvi':
+eeks: seven covered days and a numeric contracted hours value are required.",
+  "Empleado-semanas evaluables":"Assessable employee-weeks","{n}
+ no evaluables":"{n}
+ not assessable",
+  "Coinciden con contrato":"Match contract","Semanas con deficit":"Weeks with a shortfall","{n}
+ empleados":"{n}
+ employees",
+  "Horas no planificadas":"Unplanned hours","Suma de deficits semanales":"Sum of weekly shortfalls",
+  "Semanas con exceso":"Weeks with an excess","Deficits con ausencia":"Shortfalls with an absence",
+  "Empleados con déficit":"Employees with a shortfall","Al menos una semana por debajo del contrato":"At least one week below contract",
+  "Explicables por ausencias":"Explainable by absences","Horas explicables estimadas":"Estimated explainable hours",
+  "De {n}
+ h de déficit":"Of {n}
+ h of shortfall",
+  "Prioridad: {p}
+ en {s}
+ tiene el mayor deficit individual ({v}
+ h). La semana mas critica es {ws}
+ ({wv}
+ h).":"Priority: {p}
+ in {s}
+ has the largest individual shortfall ({v}
+ h). The most critical week is {ws}
+ ({wv}
+ h).",
+  "Todas las empleado-semanas evaluables alcanzan o superan el contrato.":"All assessable employee-weeks meet or exceed the contract.",
+  "Contrato y planificacion por semana":"Contract and plan by week",
+  "Vista de capacidad total. Puede ocultar compensaciones entre personas, por eso el control principal sigue siendo individual.":"A total-capacity view. It can hide compensations between people, which is why the main control remains individual.",
+  "Horas de contrato":"Contracted hours",
+  "Magnitud de los desajustes":"Size of the mismatches",
+  "Deficit y exceso aparecen en barras separadas, sin apilar ni compensar.":"Shortfall and excess appear as separate bars, not stacked or netted.",
+  "Horas faltantes":"Missing hours","Horas en exceso":"Excess hours",
+  "Mapa de desviacion empleado-semana":"Employee-week deviation map",
+  "Rojo significa déficit, blanco coincidencia y ámbar exceso. Un ✓ identifica una desviación total o parcialmente explicable por ausencias.":"Red means shortfall, white means match, and amber means excess. A ✓ marks a deviation that is fully or partly explainable by absences.",
+  "Mostrar solo empleados con alguna desviacion":"Show only employees with a deviation",
+  "No hay desviaciones con el filtro actual.":"No deviations with the current filter.",
+  "Déficit":"Shortfall","Coincidencia":"Match","Exceso":"Excess",
+  "Detalle empleado-semana":"Employee-week detail",
+  "La columna de explicación indica directamente si las horas teóricas asociadas a ausencias alcanzarían el contrato. Es una señal diagnóstica, no una imputación de trabajo.":"The explanation column shows directly whether the theoretical hours linked to absences would reach the contract. It's a diagnostic signal, not an imputation of hours worked.",
+  "Estado":"Status","Semana":"Week","Buscar empleado":"Search employee","ID empleado":"Employee ID","Todas":"All",
+  "Semana":"Week","Desviacion":"Deviation","Cobertura":"Coverage","Dias ausencia":"Absence days",
+  "Horas teóricas ausencia":"Theoretical absence hours","Planif.+ausencia":"Planned+absence",
+  "Tipos ausencia":"Absence types","Explicación":"Explanation",
+  "Ver {n}
+ registros no evaluables":"View {n}
+ non-assessable records",
+  "Semanas parciales o contratos no numericos.":"Partial weeks or non-numeric contracts.",
+  "Dias cubiertos":"Days covered","Contrato":"Contract","Planificadas":"Planned",
+  "Coincide":"Match","Faltan horas":"Hours short","Exceso horas":"Hours in excess","No evaluable":"Not assessable","Sin horas contrato":"No contracted hours",
+
+  // ---- Cobertura diaria ----
+  "Cobertura diaria de la planificacion":"Daily schedule coverage",
+  "Cobertura son las horas WORK planificadas cada fecha. Los dias presentes en el JSON sin trabajo se conservan con cero horas.":"Coverage is the planned WORK hours for each date. Dates present in the JSON with no work are kept at zero hours.",
+  "No hay fechas disponibles para analizar la cobertura.":"No dates available to analyse coverage.",
+  "Total del periodo":"Total for the period","Cobertura media diaria":"Average daily coverage",
+  "Sobre {n}
+ dias":"Over {n}
+ days","Dia de maxima cobertura":"Peak coverage day","Dias con cobertura":"Days with coverage",
+  "Dias sin horas":"Days with no hours","Fechas con 0 h":"Dates with 0 h","Empleados por dia":"Employees per day","Media diaria":"Daily average",
+  "Calendario de horas planificadas":"Planned hours calendar",
+  "Cada celda muestra las horas totales de la tienda. Cero identifica un hueco total de planificacion.":"Each cell shows the store's total hours. Zero identifies a total scheduling gap.",
+  "Evolucion diaria de la cobertura":"Daily coverage trend","Permite detectar picos, caidas y dias con cero horas.":"Helps spot peaks, drops and zero-hour days.",
+  "Patron medio por dia de la semana":"Average pattern by day of week",
+  "Ayuda a comprobar si la estructura semanal es coherente con la operativa retail esperada.":"Helps check whether the weekly structure matches the expected retail operation.",
+  "Duraciones de turno":"Shift lengths","Tabla compacta que sustituye al histograma.":"A compact table replacing the histogram.",
+  "No hay turnos.":"No shifts.","Duracion":"Length","Peso":"Share",
+  "Fuera de limites: {b}
+ por debajo de 4 h y {a}
+ por encima de 7,5 h.":"Out of range: {b}
+ below 4 h and {a}
+ above 7.5 h.",
+  "Ver detalle diario":"View daily detail","Fecha":"Date","Dia":"Day","Empleados":"Employees","Duracion media":"Average length",
+
+  // ---- Balance mañana/tarde ----
+  "Balance de turnos de mañana y tarde":"Morning/afternoon shift balance",
+  "Mañana: inicio antes de las 13:00. Tarde: inicio a las 13:00 o después. Las columnas comparan el número medio de turnos de cada franja por semana del periodo seleccionado.":"Morning: starts before 13:00. Afternoon: starts at 13:00 or later. The columns compare the average number of shifts in each slot per week over the selected period.",
+  "No hay turnos disponibles para calcular el balance de franjas.":"No shifts available to calculate the shift-slot balance.",
+  "Con al menos un turno":"With at least one shift","Rotan mañana y tarde":"Rotate morning and afternoon",
+  "Solo mañanas":"Mornings only","Solo tardes":"Afternoons only","Índice de equilibrio":"Balance index",
+  "0 = una franja;
+ 100 = reparto 50/50":"0 = a single slot;
+ 100 = a 50/50 split",
+  "Hay {n}
+ empleados sin rotación: {m}
+ solo de mañana y {a}
+ solo de tarde.":"There are {n}
+ employees with no rotation: {m}
+ mornings only and {a}
+ afternoons only.",
+  "Todos los empleados tienen al menos un turno de mañana y uno de tarde.":"Every employee has at least one morning and one afternoon shift.",
+  "Mañana y tarde":"Morning and afternoon",
+  "Promedio semanal por empleado":"Weekly average per employee",
+  "La tabla permite localizar rápidamente empleados sin mañanas o sin tardes. Cero identifica ausencia total de esa franja en el periodo seleccionado.":"The table quickly locates employees with no mornings or no af
+
+===== WFV DIAGNOSTIC =====
+
+MARKER 'Mostrar solo empleados':
+uma de deficits semanales":"Sum of weekly shortfalls",
+  "Semanas con exceso":"Weeks with an excess","Deficits con ausencia":"Shortfalls with an absence",
+  "Empleados con déficit":"Employees with a shortfall","Al menos una semana por debajo del contrato":"At least one week below contract",
+  "Explicables por ausencias":"Explainable by absences","Horas explicables estimadas":"Estimated explainable hours",
+  "De {n}
+ h de déficit":"Of {n}
+ h of shortfall",
+  "Prioridad: {p}
+ en {s}
+ tiene el mayor deficit individual ({v}
+ h). La semana mas critica es {ws}
+ ({wv}
+ h).":"Priority: {p}
+ in {s}
+ has the largest individual shortfall ({v}
+ h). The most critical week is {ws}
+ ({wv}
+ h).",
+  "Todas las empleado-semanas evaluables alcanzan o superan el contrato.":"All assessable employee-weeks meet or exceed the contract.",
+  "Contrato y planificacion por semana":"Contract and plan by week",
+  "Vista de capacidad total. Puede ocultar compensaciones entre personas, por eso el control principal sigue siendo individual.":"A total-capacity view. It can hide compensations between people, which is why the main control remains individual.",
+  "Horas de contrato":"Contracted hours",
+  "Magnitud de los desajustes":"Size of the mismatches",
+  "Deficit y exceso aparecen en barras separadas, sin apilar ni compensar.":"Shortfall and excess appear as separate bars, not stacked or netted.",
+  "Horas faltantes":"Missing hours","Horas en exceso":"Excess hours",
+  "Mapa de desviacion empleado-semana":"Employee-week deviation map",
+  "Rojo significa déficit, blanco coincidencia y ámbar exceso. Un ✓ identifica una desviación total o parcialmente explicable por ausencias.":"Red means shortfall, white means match, and amber means excess. A ✓ marks a deviation that is fully or partly explainable by absences.",
+  "Mostrar solo empleados con alguna desviacion":"Show only employees with a deviation",
+  "No hay desviaciones con el filtro actual.":"No deviations with the current filter.",
+  "Déficit":"Shortfall","Coincidencia":"Match","Exceso":"Excess",
+  "Detalle empleado-semana":"Employee-week detail",
+  "La columna de explicación indica directamente si las horas teóricas asociadas a ausencias alcanzarían el contrato. Es una señal diagnóstica, no una imputación de trabajo.":"The explanation column shows directly whether the theoretical hours linked to absences would reach the contract. It's a diagnostic signal, not an imputation of hours worked.",
+  "Estado":"Status","Semana":"Week","Buscar empleado":"Search employee","ID empleado":"Employee ID","Todas":"All",
+  "Semana":"Week","Desviacion":"Deviation","Cobertura":"Coverage","Dias ausencia":"Absence days",
+  "Horas teóricas ausencia":"Theoretical absence hours","Planif.+ausencia":"Planned+absence",
+  "Tipos ausencia":"Absence types","Explicación":"Explanation",
+  "Ver {n}
+ registros no evaluables":"View {n}
+ non-assessable records",
+  "Semanas parciales o contratos no numericos.":"Partial weeks or non-numeric contracts.",
+  "Dias cubiertos":"Days covered","Contrato":"Contract","Planificadas":"Planned",
+  "Coincide":"Match","Faltan horas":"Hours short","Exceso horas":"Hours in excess","No evaluable":"Not assessable","Sin horas contrato":"No contracted hours",
+
+  // ---- Cobertura diaria ----
+  "Cobertura diaria de la planificacion":"Daily schedule coverage",
+  "Cobertura son las horas WORK planificadas cada fecha. Los dias presentes en el JSON sin trabajo se conservan con cero horas.":"Coverage is the planned WORK hours for each date. Dates present in the JSON with no work are kept at zero hours.",
+  "No hay fechas disponibles para analizar la cobertura.":"No dates available to analyse coverage.",
+  "Total del periodo":"Total for the period","Cobertura media diaria":"Average daily coverage",
+  "Sobre {n}
+ dias":"Over {n}
+ days","Dia de maxima cobertura":"Peak coverage day","Dias con cobertura":"Days with coverage",
+  "Dias sin horas":"Days with no hours","Fechas con 0 h":"Dates with 0 h","Empleados por dia":"Employees per day","Media diaria":"Daily average",
+  "Calendario de horas planificadas":"Planned hours calendar",
+  "Cada celda muestra las horas totales de la tienda. Cero identifica un hueco total de planificacion.":"Each cell shows the store's total hours. Zero identifies a total scheduling gap.",
+  "Evolucion diaria de la cobertura":"Daily coverage trend","Permite detectar picos, caidas y dias con cero horas.":"Helps spot peaks, drops and zero-hour days.",
+  "Patron medio por dia de la semana":"Average pattern by day of week",
+  "Ayuda a comprobar si la estructura semanal es coherente con la operativa retail esperada.":"Helps check whether the weekly structure matches the expected retail operation.",
+  "Duraciones de turno":"Shift lengths","Tabla compacta que sustituye al histograma.":"A compact table replacing the histogram.",
+  "No hay turnos.":"No shifts.","Duracion":"Length","Peso":"Share",
+  "Fuera de limites: {b}
+ por debajo de 4 h y {a}
+ por encima de 7,5 h.":"Out of range: {b}
+ below 4 h and {a}
+ above 7.5 h.",
+  "Ver detalle diario":"View daily detail","Fecha":"Date","Dia":"Day","Empleados":"Employees","Duracion media":"Average length",
+
+  // ---- Balance mañana/tarde ----
+  "Balance de turnos de mañana y tarde":"Morning/afternoon shift balance",
+  "Mañana: inicio antes de las 13:00. Tarde: inicio a las 13:00 o después. Las columnas comparan el número medio de turnos de cada franja por semana del periodo seleccionado.":"Morning: starts before 13:00. Afternoon: starts at 13:00 or later. The columns compare the average number of shifts in each slot per week over the selected period.",
+  "No hay turnos disponibles para calcular el balance de franjas.":"No shifts available to calculate the shift-slot balance.",
+  "Con al menos un turno":"With at least one shift","Rotan mañana y tarde":"Rotate morning and afternoon",
+  "Solo mañanas":"Mornings only","Solo tardes":"Afternoons only","Índice de equilibrio":"Balance index",
+  "0 = una franja;
+ 100 = reparto 50/50":"0 = a single slot;
+ 100 = a 50/50 split",
+  "Hay {n}
+ empleados sin rotación: {m}
+ solo de mañana y {a}
+ solo de tarde.":"There are {n}
+ employees with no rotation: {m}
+ mornings only and {a}
+ afternoons only.",
+  "Todos los empleados tienen al menos un turno de mañana y uno de tarde.":"Every employee has at least one morning and one afternoon shift.",
+  "Mañana y tarde":"Morning and afternoon",
+  "Promedio semanal por empleado":"Weekly average per employee",
+  "La tabla permite localizar rápidamente empleados sin mañanas o sin tardes. Cero identifica ausencia total de esa franja en el periodo seleccionado.":"The table quickly locates employees with no mornings or no afternoons. Zero identifies a total absence of that slot in the selected period.",
+  "Empleado":"Employee","Mañanas/sem":"Mornings/wk","Tardes/sem":"Afternoons/wk",
+  "Mañanas tot.":"Mornings total","Tardes tot.":"Afternoons total","Rotación":"Rotation",
+  "Promedio calculado sobre {n}
+ semana(s) del periodo seleccionado.":"Average calculated over {n}
+
+
+===== WFV DIAGNOSTIC =====
+
+MARKER 'PODRIA EXPLICAR TODAS LAS HORAS FALTANTES':
+ d) => a + (dataDates.has(d) ? 1 : 0), 0);
+
+        const complete = covered === 7;
+
+        const planned = pyround(hoursByWeek.get(emp + "\u0001" + monday) || 0, 4);
+
+        let contracted = null;
+
+        const cn = Number(applicable);
+
+        if (applicable !== null && applicable !== undefined && applicable !== "" && !Number.isNaN(cn)) contracted = cn;
+
+        const difference = contracted !== null ? pyround(planned - contracted, 4) : null;
+
+        const missing = contracted !== null ? pyround(Math.max(contracted - planned, 0), 4) : null;
+
+        const excess = contracted !== null ? pyround(Math.max(planned - contracted, 0), 4) : null;
+
+        const absenceDays = weekDays.filter(d => absencesByDay.has(emp + "\u0001" + d) && !(wd && wd.has(d)) && dataDates.has(d)).sort((a, b) => a - b);
+
+        const typeSet = new Set();
+
+        for (const d of absenceDays) for (const t of absencesByDay.get(emp + "\u0001" + d)) typeSet.add(t);
+
+        const absenceTypes = [...typeSet].sort();
+
+        const potential = averageDaily !== null ? pyround(absenceDays.length * averageDaily, 4) : null;
+
+        let status;
+
+        if (!complete) status = "NO EVALUABLE";
+
+        else if (contracted === null) status = "SIN HORAS CONTRATO";
+
+        else if (Math.abs(difference) <= tol) status = "COINCIDE";
+
+        else if (difference < 0) status = "FALTAN HORAS";
+
+        else status = "EXCESO HORAS";
+
+        const missingAndAbsence = Boolean(complete && missing !== null && missing > tol && absenceDays.length);
+
+        let explanation;
+
+        if (absentEntire) explanation = "AUSENTE TODO EL PERIODO";
+
+        else if (!missingAndAbsence) explanation = "NO";
+
+        else if (potential === null) explanation = "AUSENCIA SIN MEDIA CALCULABLE";
+
+        else if (potential + tol >= missing) explanation = "PODRIA EXPLICAR TODAS LAS HORAS FALTANTES";
+
+        else explanation = "PODRIA EXPLICAR PARTE DE LAS HORAS FALTANTES";
+
+        const iso = isoCalendar(monday);
+
+        rows.push({
+          id_tienda: store, personId: person, ano_iso: iso.year, semana_iso: iso.week,
+          inicio_semana: dayISO(monday), fin_semana: dayISO(sunday),
+          dias_cubiertos_fichero: covered, semana_completa_en_fichero: complete ? "SI" : "NO",
+          applicableWorkingHours: contracted, horas_planificadas: planned,
+          diferencia_planificadas_menos_contrato: difference,
+          horas_no_planificadas_hasta_contrato: missing, horas_planificadas_en_exceso: excess,
+          estado_planificacion: status,
+          cumple_horas_contrato: status === "COINCIDE" ? "SI" : (status === "FALTAN HORAS" || status === "EXCESO HORAS") ? "NO" : "NO EVALUABLE",
+          media_horas_dia_planificado: averageDaily,
+          dias_ausencia_sin_turno: absenceDays.length,
+          fechas_ausencia_sin_turno: absenceDays.map(dayISO).join(", "),
+          tipos_ausencia: absenceTypes.join(", "),
+          horas_potenciales_asociadas_ausencia: potential,
+          faltan_horas_y_hay_ausencia: missingAndAbsence ? "SI" : "NO",
+          posible_explicacion_por_ausencia: explanation,
+          ausente_todo_el_periodo: absentEntire ? "SI" : "NO",
+        }
+);
+
+      }
+
+    }
+
+    return rows;
+
+  }
+
+
+  // ---- Analítica: balance y ausencias diarias ------------------------------
+  function classifyShiftPeriod(shiftStartMs) { return dtHour(shiftStartMs) < 13 ? "MAÑANA" : "TARDE";
+ }
+
+  function analyzeShiftBalance(shifts) {
+    const grouped = new Map();
+
+    for (const s of shifts) {
+      const k = s.store + "\u0001" + s.person;
+
+      if (!grouped.has(k)) grouped.set(k, { store: s.store, person: s.person, tm: 0, tt: 0, hm: 0, ht: 0 }
+);
+
+      const g = grouped.get(k);
+
+      if (classifyShiftPeriod(s.shiftStart) === "MAÑANA") { g.tm++;
+ g.hm += s.workedHours;
+ }
+
+      else { g.tt++;
+ g.ht += s.workedHours;
+ }
+
+    }
+
+    const rows = [...grouped.values()].sort((a, b) => String(a.store) < String(b.store) ? -1 : String(a.store) > String(b.store) ? 1 :
+      String(a.person) < String(b.person) ? -1 : String(a.person) > String(b.person) ? 1 : 0);
+
+    return rows.map(g => {
+      const total = g.tm + g.tt;
+
+      const mp = total ? g.tm / total * 100 : 0, ap = total ? g.tt / total * 100 : 0;
+
+      const bal = total ? 2 * Math.min(g.tm, g.tt) / total * 100 : 0;
+
+      const rot = (g.tm && g.tt) ? "Mañana y tarde" : g.tm ? "Solo mañanas" : "Solo tardes";
+
+      return {
+        id_tienda: g.store, personId: g.person, turnos_manana: g.tm, turnos_tarde: g.tt, turnos_totales: total,
+        horas_manana: pyround(g.hm, 4), horas_tarde: pyround(g.ht, 4),
+        porcentaje_manana: pyround(mp, 2), porcentaje_tarde: pyround(ap, 2),
+        sesgo_tarde_pct: pyround(ap - mp, 2), indice_equilibrio_pct: pyround(bal, 2),
+        rota_manana_tarde: (g.tm && g.tt) ? "SI" : "NO", estado_rotacion: rot,
+      }
+;
+
+    }
+);
+
+  }
+
+  function analyzeDailyAbsences(absences, dataDates) {
+    const byDate = new Map();
+
+    for (const a of absences) { if (!byDate.has(a.day)) byDate.set(a.day, []);
+ byDate.get(a.day).push(a);
+ }
+
+    const dates = (dataDates && dataDates.size ? [...dataDates] : [...byDate.keys()]).sort((a, b) => a - b);
+
+    return dates.map(d => {
+      const daily = byDate.get(d) || [];
+
+      const emp = new Set(daily.map(a => a.store + "\u0001" + a.person));
+
+      const types = [...new Set(daily.map(a => a.type))].sort();
+
+      return { fecha: dayISO(d), fecha_day: d, empleados_ausentes: emp.size, registros_ausencia: daily.length, tipos_ausencia: types.join(", ") }
+;
+
+    }
+);
+
+  }
+
+
+  // ---- Orquestación --------------------------------------------------------
+  function runValidation(data, scheduleSource) {
+    const ex = extractData(data, scheduleSource);
+
+    const incidents = runRules(ex.shifts);
+
+    const summaries = buildMonthlySummaries(ex.shifts, ex.employeeMonths, ex.employeeMonthsMeta, incidents);
+
+    const dataDates = collectDataDates(data);
+
+    const weekly = analyzeWeeklyHours(ex.shifts, ex.employeeMonths, ex.employeeMonthsMeta, dataDates, ex.absences, ex.presence, ex.presenceMeta);
+
+    const balance = analyzeShiftBalance(ex.shifts);
+
+    const absenceDaily = analyzeDailyAbsences(ex.absences, dataDates);
+
+
+    const shiftsFrame = ex.shifts.map(s => ({
+      id_tienda: s.store, personId: s.person, applicableWorkingHours: s.applicable,
+      day: dayISO(s.workDay), day_int: s.workDay,
+      hora_inicio: new Date(s.shiftStart).toISOString().slice(0, 19), hora_fin: new Date(s.shiftEnd).toISOString().slice(0, 19),
+      horas_totales: s.workedHours, duracion_descanso: s.breakHours, franja_turno: classifyShiftPeriod(s.shiftStart),
+    }
+));
+
+    const incidentsFrame = incidents.map(i => ({
+      id_tienda: i.store, personId: i.person, mes: i.month, tipo_incidencia: i.type,
+      fecha_inicio: dayISO(i.start), fecha_inicio_int: i.start, fecha_fin: dayISO(i.end), fecha_fin_int: i.end,
+      valor_observado: i.observed, limite: i.limit, detalle: i.detail,
+    }
+));
+
+    const absencesFrame = ex.absences.map(a => ({
+      id_tienda: a.store, personId: a.person, fecha: dayISO(a.day), fech
+
+===== WFV DIAGNOSTIC =====
+
+MARKER 'applicableWorkingHours':
+       if (operatingDay !== null && workCount) sources[source].dates.add(operatingDay);
+
+        }
+
+      }
+
+    }
+
+    const out = {}
+;
+
+    for (const [k, s] of Object.entries(sources)) {
+      const dates = [...s.dates].sort((a, b) => a - b);
+
+      out[k] = {
+        person_days: s.person_days, segments: s.segments, work_segments: s.work_segments,
+        date_count: dates.length,
+        first_date: dates.length ? dayISO(dates[0]) : null,
+        last_date: dates.length ? dayISO(dates[dates.length - 1]) : null,
+      }
+;
+
+    }
+
+    return { sources: out, manual_edit: manual }
+;
+
+  }
+
+
+  // ---- Extracción ----------------------------------------------------------
+  function extractData(data, scheduleSource) {
+    const storeId = (data.store || {}
+).id;
+
+    const storeDayTimes = data.storeDayTimes || [];
+
+    if (!Array.isArray(storeDayTimes)) throw new Error("El campo 'storeDayTimes' debe ser una lista.");
+
+    const shifts = [];
+
+    const employeeMonths = new Map();
+          // "store|person|YYYY-MM" -> applicable
+    const employeeMonthsMeta = new Map();
+      // key -> {store, person, month}
+
+    const absences = [];
+
+    const presence = new Map();
+                // "store|person" -> Set(dayInt)
+    const presenceMeta = new Map();
+
+    const maxBreakH = CONFIG.calculation.max_internal_break_hours;
+
+
+    for (const storeDay of storeDayTimes) {
+      if (!storeDay || typeof storeDay !== "object" || !storeDay.operatingDate) continue;
+
+      const operatingDay = parseDay(storeDay.operatingDate);
+
+      for (const personDay of storeDay.people || []) {
+        if (!personDay || typeof personDay !== "object") continue;
+
+        const person = personDay.person || {}
+;
+
+        const personId = personDay.personId != null ? personDay.personId : person.personId;
+
+        const applicable = person.applicableWorkingHours;
+
+        const empKey = storeId + "\u0001" + personId;
+
+        if (!presence.has(empKey)) { presence.set(empKey, new Set());
+ presenceMeta.set(empKey, { store: storeId, person: personId }
+);
+ }
+
+        presence.get(empKey).add(operatingDay);
+
+        const mKey = empKey + "\u0001" + monthKey(operatingDay);
+
+        employeeMonths.set(mKey, applicable);
+
+        employeeMonthsMeta.set(mKey, { store: storeId, person: personId, month: monthKey(operatingDay) }
+);
+
+
+        const dayTimes = personDay.dayTimes || {}
+;
+
+        // Ausencias
+        const seen = new Set();
+
+        for (const absence of dayTimes.absences || []) {
+          if (!absence || typeof absence !== "object") continue;
+
+          const status = String(absence.status || "").toUpperCase();
+
+          if (status !== "VALIDATED" && status !== "APPROVED") continue;
+
+          const t = absence.type || {}
+;
+
+          const absType = String(t.name || t.description || absence.id || "AUSENCIA");
+
+          const k = absType + "\u0001" + status;
+
+          if (seen.has(k)) continue;
+
+          seen.add(k);
+
+          absences.push({ store: storeId, person: personId, day: operatingDay, type: absType, status }
+);
+
+        }
+
+        // Segmentos WORK
+        let selected = dayTimes[scheduleSource];
+
+        if (!Array.isArray(selected)) selected = [];
+
+        const segs = [];
+
+        for (const seg of selected) {
+          if (!isWork(seg)) continue;
+
+          const sv = seg.startDateTime, ev = seg.endDateTime;
+
+          if (!sv || !ev) continue;
+
+          const start = parseDateTime(sv), end = parseDateTime(ev);
+
+          if (end <= start) throw new Error(`Segmento invalido en ${scheduleSource}
+: personId=${personId}
+`);
+
+          segs.push([start, end]);
+
+        }
+
+        if (!segs.length) continue;
+
+        segs.sort((a, b) => a[0] - b[0]);
+
+        const shiftStart = segs[0][0];
+
+        const shiftEnd = Math.max(...segs.map(s => s[1]));
+
+        let netMs = segs.reduce((a, s) => a + (s[1] - s[0]), 0);
+
+        let breakMs = 0, prevEnd = segs[0][1];
+
+        for (let i = 1;
+ i < segs.length;
+ i++) {
+          const [cs, ce] = segs[i];
+
+          const gap = cs - prevEnd;
+
+          if (gap > 0 && gap <= maxBreakH * 3600000) breakMs += gap;
+
+          if (ce > prevEnd) prevEnd = ce;
+
+        }
+
+        shifts.push({
+          store: storeId, person: personId, applicable, workDay: operatingDay,
+          shiftStart, shiftEnd,
+          workedHours: pyround(netMs / 3600000, 4),
+          breakHours: pyround(breakMs / 3600000, 4),
+        }
+);
+
+      }
+
+    }
+
+    const scmp = (a, b) => (String(a.store) < String(b.store) ? -1 : String(a.store) > String(b.store) ? 1 :
+      String(a.person) < String(b.person) ? -1 : String(a.person) > String(b.person) ? 1 : 0);
+
+    shifts.sort((a, b) => scmp(a, b) || a.workDay - b.workDay);
+
+    absences.sort((a, b) => scmp(a, b) || a.day - b.day);
+
+    return { shifts, employeeMonths, employeeMonthsMeta, absences, presence, presenceMeta, storeId }
+;
+
+  }
+
+
+  // ---- Fechas de datos -----------------------------------------------------
+  function collectDataDates(data) {
+    const set = new Set();
+
+    for (const item of data.storeDayTimes || [])
+      if (item && typeof item === "object" && item.operatingDate) set.add(parseDay(item.operatingDate));
+
+    return set;
+
+  }
+
+
+  // ---- Rachas consecutivas -------------------------------------------------
+  function findConsecutiveStreaks(days) {
+    if (!days.length) return [];
+
+    const uniq = [...new Set(days)].sort((a, b) => a - b);
+
+    const streaks = [[uniq[0]]];
+
+    for (let i = 1;
+ i < uniq.length;
+ i++) {
+      if (uniq[i] === streaks[streaks.length - 1][streaks[streaks.length - 1].length - 1] + 1)
+        streaks[streaks.length - 1].push(uniq[i]);
+
+      else streaks.push([uniq[i]]);
+
+    }
+
+    return streaks;
+
+  }
+
+
+  // ---- Reglas --------------------------------------------------------------
+  function groupByEmployee(shifts) {
+    const m = new Map();
+
+    for (const s of shifts) { const k = s.store + "\u0001" + s.person;
+ if (!m.has(k)) m.set(k, []);
+ m.get(k).push(s);
+ }
+
+    return m;
+
+  }
+
+  function ruleMaxShift(shifts) {
+    const rule = CONFIG.rules.max_shift_hours;
+ if (!rule.enabled) return [];
+
+    const out = [];
+
+    for (const s of shifts) {
+      if (s.workedHours <= rule.limit) continue;
+
+      out.push({ store: s.store, person: s.person, month: monthKey(s.workDay), type: rule.incident_type,
+        start: s.workDay, end: s.workDay, observed: s.workedHours, limit: `<= ${numberText(rule.limit)}
+ horas`,
+        detail: `${fmtDMY(s.workDay)}
+: ${fmt2(s.workedHours)}
+ h (${dtHHMM(s.shiftStart)}
+-${dtHHMM(s.shiftEnd)}
+)` }
+);
+
+    }
+
+    return out;
+
+  }
+
+  function ruleMinShift(shifts) {
+    const rule = CONFIG.rules.min_shift_hours;
+ if (!rule.enabled) return [];
+
+    const out = [];
+
+    for (const s of shifts) {
+      if (s.workedHours >= rule.limit) continue;
+
+      out.push({ store: s.store, person: s.person, month: monthKey(s.workDay), type: rule.incident_type,
+        start: s.workDay, end: s.workDay, observed: s.workedHours, limit: `>= ${numberText(rule.limit)}
+ horas`,
+        detail: `${fmtDMY(s.workDay)}
+: ${fmt2(s.workedHours)}
+ h (${dtHHMM(s.shiftStart)}
+-${dtHHMM(s.shiftEnd)}
+)` }
+);
+
+    }
+
+   
