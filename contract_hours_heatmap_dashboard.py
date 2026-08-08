@@ -47,7 +47,7 @@ def apply_contract_hours_heatmap_support(source: str) -> str:
         fig = go.Figure(go.Heatmap(z=pivot.to_numpy(), x=pivot.columns, y=pivot.index, zmin=-max_abs, zmax=max_abs, zmid=0, colorscale=[[0, "#b91c1c"], [0.5, "#f8fafc"], [1, "#d97706"]], text=text, texttemplate="%{text}", colorbar={"title": "Desviacion h"}, hovertemplate="%{y}<br>%{x}<br>%{z:+.1f} h<extra></extra>"))
 '''
     new_text = '''        explainable = set(zip(detail.loc[detail["posible_explicacion_por_ausencia"].astype(str).str.contains("PODRIA EXPLICAR", case=False, na=False), "Empleado"], detail.loc[detail["posible_explicacion_por_ausencia"].astype(str).str.contains("PODRIA EXPLICAR", case=False, na=False), "Semana"]))
-        text = [["" if pd.isna(value) else f"{value:+.1f}{' ✓' if (pivot.index[i], pivot.columns[j]) in explainable and not (neutralize_absence and (pivot.index[i], pivot.columns[j]) in fully_explainable) else ''}" for j, value in enumerate(row)] for i, row in enumerate(pivot.to_numpy())]
+        text = [["" if pd.isna(value) else ("0" if neutralize_absence and (pivot.index[i], pivot.columns[j]) in fully_explainable and abs(value) <= 0.01 else f"{value:+.1f}{' ✓' if (pivot.index[i], pivot.columns[j]) in explainable else ''}") for j, value in enumerate(row)] for i, row in enumerate(pivot.to_numpy())]
 
         contract_labels = {}
         for employee_key, employee_rows in detail.sort_values(["ano_iso", "semana_iso"]).groupby("Empleado", sort=False):
