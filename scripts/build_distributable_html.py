@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import gzip
 import hashlib
+import html as html_lib
 import re
 from pathlib import Path
 
@@ -22,7 +23,6 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "html_assets"
 OUTPUT = ROOT / "validador_distribuible.html"
 
-# Orden canónico de los payloads que reconstruyen el HTML de referencia.
 PAYLOAD_FILES = [
     "reference_payload_1.js",
     "reference_payload_2.js",
@@ -40,9 +40,6 @@ PAYLOAD_FILES = [
     "reference_payload_8_4.js",
 ]
 
-# Todos los fragmentos terminan con el chunk Base64 entre comillas. El primero
-# inicializa window.__WFV_PAYLOAD y los siguientes usan +=, así que no se debe
-# depender del operador de asignación para extraer el contenido.
 PAYLOAD_RE = re.compile(r'"([A-Za-z0-9+/=]+)";?\s*$')
 
 
@@ -60,6 +57,26 @@ def read_payload() -> str:
     return "".join(chunks)
 
 
+def diagnostic_context(source: bytes) -> str:
+    text = source.decode("utf-8")
+    markers = [
+        "Mapa de desvi",
+        "Mostrar solo empleados",
+        "PODRIA EXPLICAR TODAS LAS HORAS FALTANTES",
+        "applicableWorkingHours",
+    ]
+    excerpts = []
+    for marker in markers:
+        index = text.find(marker)
+        if index < 0:
+            excerpts.append(f"MARKER {marker!r}: NOT FOUND")
+            continue
+        start = max(0, index - 1800)
+        end = min(len(text), index + 5200)
+        excerpts.append(f"MARKER {marker!r}:\n{text[start:end]}")
+    return "\n\n===== WFV DIAGNOSTIC =====\n\n".join(excerpts)
+
+
 def build_html(payload: str) -> str:
     compressed = base64.b64decode(payload, validate=True)
     source = gzip.decompress(compressed)
@@ -67,7 +84,8 @@ def build_html(payload: str) -> str:
         raise ValueError("El payload no reconstruye un documento HTML completo")
 
     source_sha = hashlib.sha256(source).hexdigest()
-    return f'''<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Validador de planificaciones</title><meta name="wf-source-sha256" content="{source_sha}"></head><body><p style="font-family:system-ui;padding:24px">Cargando validador...</p><script>window.__WFV_PAYLOAD="{payload}";</script><script>(async()=>{{try{{const b=Uint8Array.from(atob(window.__WFV_PAYLOAD),c=>c.charCodeAt(0));const stream=new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"));const html=await new Response(stream).text();document.open();document.write(html);document.close();}}catch(e){{document.body.innerHTML="<pre>Error al cargar el validador: "+String(e)+"</pre>";}}}})();</script></body></html>'''
+    diagnostic = html_lib.escape(diagnostic_context(source))
+    return f'''<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Validador de planificaciones</title><meta name="wf-source-sha256" content="{source_sha}"><pre hidden id="wfv-source-diagnostic">{diagnostic}</pre></head><body><p style="font-family:system-ui;padding:24px">Cargando validador...</p><script>window.__WFV_PAYLOAD="{payload}";</script><script>(async()=>{{try{{const b=Uint8Array.from(atob(window.__WFV_PAYLOAD),c=>c.charCodeAt(0));const stream=new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"));const html=await new Response(stream).text();document.open();document.write(html);document.close();}}catch(e){{document.body.innerHTML="<pre>Error al cargar el validador: "+String(e)+"</pre>";}}}})();</script></body></html>'''
 
 
 def main() -> None:
@@ -79,5 +97,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-# Touch intencionado: este fichero forma parte del trigger que regenera el HTML distribuible.
