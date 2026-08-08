@@ -60,21 +60,22 @@ def read_payload() -> str:
 def diagnostic_context(source: bytes) -> str:
     text = source.decode("utf-8")
     markers = [
-        "Mapa de desvi",
-        "Mostrar solo empleados",
+        "Mapa de desviacion empleado-semana",
+        "Mostrar solo empleados con alguna desviacion",
         "PODRIA EXPLICAR TODAS LAS HORAS FALTANTES",
         "applicableWorkingHours",
     ]
     excerpts = []
     for marker in markers:
-        index = text.find(marker)
-        if index < 0:
+        positions = [match.start() for match in re.finditer(re.escape(marker), text)]
+        if not positions:
             excerpts.append(f"MARKER {marker!r}: NOT FOUND")
             continue
-        start = max(0, index - 1800)
-        end = min(len(text), index + 5200)
-        excerpt = text[start:end].replace(";", ";\n").replace("}", "}\n")
-        excerpts.append(f"MARKER {marker!r}:\n{excerpt}")
+        for occurrence, index in enumerate(positions[:6], start=1):
+            start = max(0, index - 2200)
+            end = min(len(text), index + 7000)
+            excerpt = text[start:end].replace(";", ";\n").replace("}", "}\n")
+            excerpts.append(f"MARKER {marker!r} OCCURRENCE {occurrence}/{len(positions)}:\n{excerpt}")
     return "\n\n===== WFV DIAGNOSTIC =====\n\n".join(excerpts)
 
 
