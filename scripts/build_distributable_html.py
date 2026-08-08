@@ -128,15 +128,28 @@ def patch_contract_hours_heatmap(source: str) -> str:
         label="neutralización visual",
     )
 
-    old_text = '''const matText=rowEmps.map((e,i)=>semanas.map((s,j)=>{ const v=matrix[i][j]; if(v==null)return""; return (v>=0?"+":"")+v.toFixed(1)+(explSet.has(e+"|"+s)?" ✓":""); }));
+    source = _replace(
+        source,
+        'return (v>=0?"+":"")+v.toFixed(1)+(explSet.has(e+"|"+s)?" ✓":"");',
+        'const key=e+"|"+s; if(S.f.wkNeutralizeAbs&&fullExplSet.has(key)&&Math.abs(v)<=0.01)return"0"; '
+        'return (v>=0?"+":"")+v.toFixed(1)+(explSet.has(key)?" ✓":"");',
+        expected=1,
+        label="texto de celdas",
+    )
 
-    h+=chartHeatmapText(rowEmps,semanas,matrix,matText,color);'''
-    new_text = '''const matText=rowEmps.map((e,i)=>semanas.map((s,j)=>{ const v=matrix[i][j]; if(v==null)return""; const key=e+"|"+s; if(S.f.wkNeutralizeAbs&&fullExplSet.has(key)&&Math.abs(v)<=0.01)return"0"; return (v>=0?"+":"")+v.toFixed(1)+(explSet.has(key)?" ✓":""); }));
-
-    const employeeLabels=rowEmps.map(e=>{ const employeeRows=rows.filter(r=>r.Empleado===e).sort((a,b)=>a.ano_iso-b.ano_iso||a.semana_iso-b.semana_iso); const values=[]; employeeRows.forEach(r=>{ const v=Number(r._app); if(Number.isNaN(v))return; if(!values.length||Math.abs(values[values.length-1]-v)>0.01)values.push(v); }); const contract=values.length?values.map(v=>Number.isInteger(v)?String(v):fmt(v,1)).join(" → ")+" h":"— h"; return e+" · "+contract; });
-    const weekLabels=totals.map(x=>dmy(x.inicio));
-    h+=chartHeatmapText(employeeLabels,weekLabels,matrix,matText,color);'''
-    source = _replace(source, old_text, new_text, expected=1, label="etiquetas del mapa")
+    source = _replace(
+        source,
+        'h+=chartHeatmapText(rowEmps,semanas,matrix,matText,color);',
+        'const employeeLabels=rowEmps.map(e=>{ const employeeRows=rows.filter(r=>r.Empleado===e).sort((a,b)=>a.ano_iso-b.ano_iso||a.semana_iso-b.semana_iso); '
+        'const values=[]; employeeRows.forEach(r=>{ const v=Number(r._app); if(Number.isNaN(v))return; '
+        'if(!values.length||Math.abs(values[values.length-1]-v)>0.01)values.push(v); }); '
+        'const contract=values.length?values.map(v=>Number.isInteger(v)?String(v):fmt(v,1)).join(" → ")+" h":"— h"; '
+        'return e+" · "+contract; });\n'
+        '    const weekLabels=totals.map(x=>dmy(x.inicio));\n'
+        '    h+=chartHeatmapText(employeeLabels,weekLabels,matrix,matText,color);',
+        expected=1,
+        label="etiquetas del mapa",
+    )
 
     source = _replace(
         source,
