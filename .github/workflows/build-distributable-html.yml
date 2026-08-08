@@ -1,0 +1,38 @@
+name: Build distributable HTML
+
+on:
+  push:
+    paths:
+      - 'html_assets/reference_payload_*.js'
+      - 'scripts/build_distributable_html.py'
+      - '.github/workflows/build-distributable-html.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Generate single-file HTML
+        run: python scripts/build_distributable_html.py
+
+      - name: Commit regenerated distributable
+        run: |
+          if git diff --quiet -- validador_distribuible.html; then
+            echo 'validador_distribuible.html is already up to date.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add validador_distribuible.html
+          git commit -m 'Regenerar HTML distribuible'
+          git push origin HEAD:${{ github.ref_name }}
