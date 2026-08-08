@@ -64,6 +64,7 @@ def diagnostic_context(source: bytes) -> str:
         "Mostrar solo empleados con alguna desviacion",
         "PODRIA EXPLICAR TODAS LAS HORAS FALTANTES",
         "applicableWorkingHours",
+        "wkDev",
     ]
     excerpts = []
     for marker in markers:
@@ -71,9 +72,9 @@ def diagnostic_context(source: bytes) -> str:
         if not positions:
             excerpts.append(f"MARKER {marker!r}: NOT FOUND")
             continue
-        for occurrence, index in enumerate(positions[:6], start=1):
-            start = max(0, index - 2200)
-            end = min(len(text), index + 7000)
+        for occurrence, index in enumerate(positions[:10], start=1):
+            start = max(0, index - 2600)
+            end = min(len(text), index + 7600)
             excerpt = text[start:end].replace(";", ";\n").replace("}", "}\n")
             excerpts.append(f"MARKER {marker!r} OCCURRENCE {occurrence}/{len(positions)}:\n{excerpt}")
     return "\n\n===== WFV DIAGNOSTIC =====\n\n".join(excerpts)
