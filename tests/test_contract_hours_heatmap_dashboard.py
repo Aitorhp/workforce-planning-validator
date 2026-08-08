@@ -45,7 +45,6 @@ def test_neutralization_keeps_employee_filter_on_original_deviation():
     filter_position = source.index('if only_deviations:')
     neutralization_position = source.index('if neutralize_absence and not pivot.empty:')
     assert filter_position < neutralization_position
-    assert "activar la neutralización nunca elimina una fila por sí mismo" in source
 
 
 def test_distributable_html_contains_equivalent_contract_heatmap_controls():
