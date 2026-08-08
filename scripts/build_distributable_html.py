@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """Genera el HTML único distribuible del validador.
 
-El HTML funcional completo se conserva comprimido en los fragmentos
-``html_assets/reference_payload_*.js``. Este script concatena esos fragmentos
-en el orden definido, valida que formen un gzip correcto y genera un único
-``validador_distribuible.html`` que no depende de ningún fichero externo.
-
-El fichero de salida es un artefacto generado: debe sobrescribirse en cada
-iteración que modifique la versión HTML del validador.
+El HTML funcional base se conserva comprimido en los fragmentos
+``html_assets/reference_payload_*.js``. Antes de volver a comprimirlo, este
+generador aplica las extensiones de presentación que deben mantenerse en
+paridad con Streamlit.
 """
 
 from __future__ import annotations
@@ -21,7 +18,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "html_assets"
 OUTPUT = ROOT / "validador_distribuible.html"
-DIAGNOSTIC_OUTPUT = ROOT / "standalone" / "source_diagnostic.txt"
 
 PAYLOAD_FILES = [
     "reference_payload_1.js",
@@ -57,22 +53,108 @@ def read_payload() -> str:
     return "".join(chunks)
 
 
-def diagnostic_context(source: bytes) -> str:
-    text = source.decode("utf-8")
-    marker = "wkDev"
-    positions = [match.start() for match in re.finditer(re.escape(marker), text)]
-    excerpts = []
-    for occurrence, index in enumerate(positions, start=1):
-        start = max(0, index - 1800)
-        end = min(len(text), index + 3600)
-        excerpt = text[start:end].replace(";", ";\n").replace("}", "}\n")
-        excerpts.append(f"MARKER {marker!r} OCCURRENCE {occurrence}/{len(positions)}:\n{excerpt}")
-    return "\n\n===== WFV DIAGNOSTIC =====\n\n".join(excerpts)
+def _replace(source: str, old: str, new: str, *, expected: int, label: str) -> str:
+    found = source.count(old)
+    if found != expected:
+        raise ValueError(f"Parche HTML '{label}': se esperaban {expected} coincidencias y se encontraron {found}")
+    return source.replace(old, new)
+
+
+def patch_contract_hours_heatmap(source: str) -> str:
+    """Replica en el HTML las mejoras visuales del mapa empleado-semana.
+
+    Solo transforma la presentación. Los valores de contrato, desviación y
+    explicación por ausencia ya vienen calculados por el motor JavaScript
+    equivalente al motor Python.
+    """
+
+    source = _replace(
+        source,
+        '"Mostrar solo empleados con alguna desviacion":"Show only employees with a deviation",',
+        '"Mostrar solo empleados con alguna desviacion":"Show only employees with a deviation",\n'
+        '  "Neutralizar déficits totalmente explicables por ausencias":"Neutralize shortfalls fully explainable by absences",',
+        expected=1,
+        label="traducción del nuevo filtro",
+    )
+
+    source = _replace(
+        source,
+        'f:{ wkDev:true, wkStatus:null,',
+        'f:{ wkDev:true, wkNeutralizeAbs:false, wkStatus:null,',
+        expected=2,
+        label="estado del filtro",
+    )
+
+    source = _replace(
+        source,
+        'h+=`<label class="chk"><input type="checkbox" id="wkDev" ${S.f.wkDev?"checked":""}> ${t("Mostrar solo empleados con alguna desviacion")}</label>`;',
+        'h+=`<div class="controls"><label class="chk"><input type="checkbox" id="wkDev" ${S.f.wkDev?"checked":""}> ${t("Mostrar solo empleados con alguna desviacion")}</label>`+\n'
+        '     `<label class="chk"><input type="checkbox" id="wkNeutralizeAbs" ${S.f.wkNeutralizeAbs?"checked":""}> ${t("Neutralizar déficits totalmente explicables por ausencias")}</label></div>`;',
+        expected=1,
+        label="controles del mapa",
+    )
+
+    source = _replace(
+        source,
+        'const pivot=new Map(); const explSet=new Set();',
+        'const pivot=new Map(); const explSet=new Set(); const fullExplSet=new Set();',
+        expected=1,
+        label="conjuntos de explicación",
+    )
+
+    source = _replace(
+        source,
+        'if(String(r.posible_explicacion_por_ausencia).includes("PODRIA EXPLICAR")) explSet.add(r.Empleado+"|"+r.Semana);',
+        'if(String(r.posible_explicacion_por_ausencia).includes("PODRIA EXPLICAR")) explSet.add(r.Empleado+"|"+r.Semana); '
+        'if(r.deficit_explicable) fullExplSet.add(r.Empleado+"|"+r.Semana);',
+        expected=1,
+        label="identificación de déficit explicable",
+    )
+
+    source = _replace(
+        source,
+        'const matrix=rowEmps.map(e=>semanas.map(s=>pivot.has(e+"|"+s)?pivot.get(e+"|"+s):null));',
+        'const displayValue=(e,s)=>{ const key=e+"|"+s; const v=pivot.has(key)?pivot.get(key):null; '
+        'return S.f.wkNeutralizeAbs&&fullExplSet.has(key)&&v!=null&&v< -0.01?0:v; };\n'
+        '    const matrix=rowEmps.map(e=>semanas.map(s=>displayValue(e,s)));',
+        expected=1,
+        label="neutralización visual",
+    )
+
+    old_text = '''const matText=rowEmps.map((e,i)=>semanas.map((s,j)=>{ const v=matrix[i][j]; if(v==null)return""; return (v>=0?"+":"")+v.toFixed(1)+(explSet.has(e+"|"+s)?" ✓":""); }));
+
+    h+=chartHeatmapText(rowEmps,semanas,matrix,matText,color);'''
+    new_text = '''const matText=rowEmps.map((e,i)=>semanas.map((s,j)=>{ const v=matrix[i][j]; if(v==null)return""; const key=e+"|"+s; if(S.f.wkNeutralizeAbs&&fullExplSet.has(key)&&Math.abs(v)<=0.01)return"0"; return (v>=0?"+":"")+v.toFixed(1)+(explSet.has(key)?" ✓":""); }));
+
+    const employeeLabels=rowEmps.map(e=>{ const employeeRows=rows.filter(r=>r.Empleado===e).sort((a,b)=>a.ano_iso-b.ano_iso||a.semana_iso-b.semana_iso); const values=[]; employeeRows.forEach(r=>{ const v=Number(r._app); if(Number.isNaN(v))return; if(!values.length||Math.abs(values[values.length-1]-v)>0.01)values.push(v); }); const contract=values.length?values.map(v=>Number.isInteger(v)?String(v):fmt(v,1)).join(" → ")+" h":"— h"; return e+" · "+contract; });
+    const weekLabels=totals.map(x=>dmy(x.inicio));
+    h+=chartHeatmapText(employeeLabels,weekLabels,matrix,matText,color);'''
+    source = _replace(source, old_text, new_text, expected=1, label="etiquetas del mapa")
+
+    source = _replace(
+        source,
+        'on("wkDev","change",e=>{S.f.wkDev=e.target.checked;renderTab();});',
+        'on("wkDev","change",e=>{S.f.wkDev=e.target.checked;renderTab();});\n'
+        '  on("wkNeutralizeAbs","change",e=>{S.f.wkNeutralizeAbs=e.target.checked;renderTab();});',
+        expected=1,
+        label="binding del nuevo filtro",
+    )
+
+    return source
+
+
+def patched_payload(payload: str) -> tuple[str, bytes]:
+    compressed = base64.b64decode(payload, validate=True)
+    source = gzip.decompress(compressed).decode("utf-8")
+    source = patch_contract_hours_heatmap(source)
+    source_bytes = source.encode("utf-8")
+    # mtime=0 hace que el artefacto sea reproducible entre ejecuciones.
+    compressed_patched = gzip.compress(source_bytes, mtime=0)
+    return base64.b64encode(compressed_patched).decode("ascii"), source_bytes
 
 
 def build_html(payload: str) -> str:
-    compressed = base64.b64decode(payload, validate=True)
-    source = gzip.decompress(compressed)
+    payload, source = patched_payload(payload)
     if b"<html" not in source.lower() or b"</html>" not in source.lower():
         raise ValueError("El payload no reconstruye un documento HTML completo")
 
@@ -82,13 +164,9 @@ def build_html(payload: str) -> str:
 
 def main() -> None:
     payload = read_payload()
-    compressed = base64.b64decode(payload, validate=True)
-    source = gzip.decompress(compressed)
-    DIAGNOSTIC_OUTPUT.write_text(diagnostic_context(source), encoding="utf-8", newline="\n")
     html = build_html(payload)
     OUTPUT.write_text(html, encoding="utf-8", newline="\n")
     print(f"Generado: {OUTPUT.relative_to(ROOT)} ({len(html):,} bytes)")
-    print(f"Diagnóstico temporal: {DIAGNOSTIC_OUTPUT.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
