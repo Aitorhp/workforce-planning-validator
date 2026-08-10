@@ -5,6 +5,8 @@ on:
     paths:
       - 'html_assets/reference_payload_*.js'
       - 'scripts/build_distributable_html.py'
+      - 'scripts/weekend_html_patch.py'
+      - 'scripts/apply_weekend_generator_patch.py'
       - 'scripts/diagnose_weekend_html.py'
       - '.github/workflows/build-distributable-html.yml'
   workflow_dispatch:
@@ -23,6 +25,9 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
+      - name: Integrate weekend HTML patch
+        run: python scripts/apply_weekend_generator_patch.py
+
       - name: Generate single-file HTML
         run: python scripts/build_distributable_html.py
 
@@ -31,12 +36,12 @@ jobs:
 
       - name: Commit regenerated distributable
         run: |
-          if [ -z "$(git status --porcelain -- validador_distribuible.html standalone/weekend_source_diagnostic.txt)" ]; then
+          if [ -z "$(git status --porcelain -- scripts/build_distributable_html.py validador_distribuible.html standalone/weekend_source_diagnostic.txt)" ]; then
             echo 'Generated files are already up to date.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add validador_distribuible.html standalone/weekend_source_diagnostic.txt
+          git add scripts/build_distributable_html.py validador_distribuible.html standalone/weekend_source_diagnostic.txt
           git commit -m 'Regenerar HTML distribuible'
           git push origin HEAD:${{ github.ref_name }}
