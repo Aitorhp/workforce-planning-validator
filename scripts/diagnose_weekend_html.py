@@ -13,7 +13,7 @@ OUTPUT = ROOT / "standalone" / "weekend_source_diagnostic.txt"
 
 payload = read_payload()
 source = gzip.decompress(base64.b64decode(payload, validate=True)).decode("utf-8")
-markers = ["Incumplen fines completos", "Mínimo de fines de semana completos", "fines_semana_libres"]
+markers = ['t("Resumen del periodo")', 't("Mapa empleado-fin de semana")', 't("Fines completos")']
 parts = []
 for marker in markers:
     index = source.find(marker)
@@ -25,7 +25,7 @@ for marker in markers:
         function_start = max(0, index - 4000)
     next_function = source.find("\nfunction ", index)
     if next_function < 0:
-        next_function = min(len(source), index + 16000)
+        next_function = min(len(source), index + 22000)
     block = source[function_start:next_function]
     block = block.replace(";", ";\n").replace("}", "}\n")
     parts.append(f"MARKER {marker!r}\n{block}")
