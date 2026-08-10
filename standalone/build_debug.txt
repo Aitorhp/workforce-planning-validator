@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/home/runner/work/workforce-planning-validator/workforce-planning-validator/scripts/build_distributable_html.py", line 288, in <module>
+    main()
+  File "/home/runner/work/workforce-planning-validator/workforce-planning-validator/scripts/build_distributable_html.py", line 282, in main
+    html = build_html(payload)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/workforce-planning-validator/workforce-planning-validator/scripts/build_distributable_html.py", line 272, in build_html
+    payload, source = patched_payload(payload)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/workforce-planning-validator/workforce-planning-validator/scripts/build_distributable_html.py", line 262, in patched_payload
+    source = patch_weekend_assignment(source)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/workforce-planning-validator/workforce-planning-validator/scripts/weekend_html_patch.py", line 193, in patch_weekend_assignment
+    raise ValueError(
+ValueError: Parche HTML de fines de semana: se esperaba un renderWeekends y se encontraron 0
+exit_status=1
