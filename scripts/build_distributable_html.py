@@ -163,10 +163,102 @@ def patch_contract_hours_heatmap(source: str) -> str:
     return source
 
 
+def patch_collapsible_sidebar(source: str) -> str:
+    """Añade un control plegable al panel lateral del HTML autónomo.
+
+    La localización del panel se hace en tiempo de ejecución a partir de su
+    contenido y geometría para no depender de nombres de clases internos.
+    Streamlit ya ofrece de forma nativa el control equivalente para su sidebar.
+    """
+
+    css = r'''
+<style id="wfv-collapsible-sidebar-style">
+#wfvSidebarToggle {
+  position: fixed; z-index: 10000; top: 50vh; width: 34px; height: 58px;
+  transform: translateY(-50%); border: 1px solid #64748b; border-radius: 0 12px 12px 0;
+  background: #0f172a; color: #ffffff; font: 700 24px/1 system-ui, sans-serif;
+  box-shadow: 0 4px 14px rgba(15,23,42,.24); cursor: pointer; touch-action: manipulation;
+}
+#wfvSidebarToggle:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+.wfv-sidebar-parent.wfv-sidebar-collapsed { grid-template-columns: minmax(0,1fr) !important; }
+.wfv-sidebar-parent.wfv-sidebar-collapsed > .wfv-sidebar-target { display: none !important; }
+.wfv-sidebar-parent.wfv-sidebar-collapsed > :not(.wfv-sidebar-target) {
+  grid-column: 1 !important; max-width: none !important; width: 100% !important;
+}
+@media (max-width: 700px) {
+  #wfvSidebarToggle { width: 38px; height: 64px; font-size: 26px; }
+}
+</style>
+'''
+    script = r'''
+<script id="wfv-collapsible-sidebar-script">
+(function(){
+  function findSidebar(){
+    const nodes=[...document.body.querySelectorAll("div,aside,section,nav")];
+    const matches=nodes.filter(el=>{
+      if(el.id==="wfvSidebarToggle") return false;
+      const text=(el.innerText||"").replace(/\s+/g," ");
+      const hasPlanning=text.includes("Planificaciones (JSON/TXT)")||text.includes("Schedule (JSON/TXT)");
+      const hasValidator=text.includes("Validador")||text.includes("Validator");
+      if(!hasPlanning||!hasValidator) return false;
+      const r=el.getBoundingClientRect();
+      return r.left<=8 && r.width>=260 && r.width<=650 && r.height>=Math.min(500,window.innerHeight*.6);
+    });
+    matches.sort((a,b)=>{
+      const ar=a.getBoundingClientRect(), br=b.getBoundingClientRect();
+      return (ar.width*ar.height)-(br.width*br.height);
+    });
+    return matches[0]||null;
+  }
+
+  function init(){
+    const sidebar=findSidebar();
+    if(!sidebar||!sidebar.parentElement||document.getElementById("wfvSidebarToggle")) return;
+    const parent=sidebar.parentElement;
+    sidebar.classList.add("wfv-sidebar-target");
+    parent.classList.add("wfv-sidebar-parent");
+
+    const button=document.createElement("button");
+    button.id="wfvSidebarToggle";
+    button.type="button";
+    document.body.appendChild(button);
+
+    let collapsed=false;
+    function sync(){
+      parent.classList.toggle("wfv-sidebar-collapsed",collapsed);
+      button.textContent=collapsed?"›":"‹";
+      button.setAttribute("aria-expanded",String(!collapsed));
+      button.setAttribute("aria-label",collapsed?"Mostrar panel / Show panel":"Ocultar panel / Hide panel");
+      button.title=button.getAttribute("aria-label");
+      if(collapsed){
+        button.style.left="0px";
+      }else{
+        const rect=sidebar.getBoundingClientRect();
+        button.style.left=Math.max(0,Math.round(rect.right-1))+"px";
+      }
+      window.dispatchEvent(new Event("resize"));
+    }
+
+    button.addEventListener("click",()=>{ collapsed=!collapsed; sync(); });
+    window.addEventListener("resize",()=>{ if(!collapsed){ const r=sidebar.getBoundingClientRect(); button.style.left=Math.max(0,Math.round(r.right-1))+"px"; } });
+    sync();
+  }
+
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",()=>setTimeout(init,0));
+  else setTimeout(init,0);
+})();
+</script>
+'''
+    source = _replace(source, "</head>", css + "</head>", expected=1, label="estilos sidebar plegable")
+    source = _replace(source, "</body>", script + "</body>", expected=1, label="script sidebar plegable")
+    return source
+
+
 def patched_payload(payload: str) -> tuple[str, bytes]:
     compressed = base64.b64decode(payload, validate=True)
     source = gzip.decompress(compressed).decode("utf-8")
     source = patch_contract_hours_heatmap(source)
+    source = patch_collapsible_sidebar(source)
     source_bytes = source.encode("utf-8")
     # mtime=0 hace que el artefacto sea reproducible entre ejecuciones.
     compressed_patched = gzip.compress(source_bytes, mtime=0)
