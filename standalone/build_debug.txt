@@ -1,2 +1,0 @@
-Generado: validador_distribuible.html (70,137 bytes)
-exit_status=0
