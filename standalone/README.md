@@ -13,16 +13,16 @@ La versión HTML del validador se mantiene junto a Streamlit y tiene dos represe
 python scripts/build_distributable_html.py
 ```
 
-El generador concatena `../html_assets/reference_payload_*.js`, valida que reconstruyan un HTML completo y escribe de nuevo el fichero distribuible. El resultado puede copiarse, enviarse o abrirse directamente desde un navegador sin Python, Streamlit, servidor ni ficheros auxiliares.
+El generador concatena `../html_assets/reference_payload_*.js`, valida que reconstruyan un HTML completo, aplica los parches de presentación versionados —incluido `scripts/weekend_html_patch.py` para mantener en paridad las reglas configurables de descanso— y escribe de nuevo el fichero distribuible. El resultado puede copiarse, enviarse o abrirse directamente desde un navegador sin Python, Streamlit, servidor ni ficheros auxiliares.
 
-Además, `.github/workflows/build-distributable-html.yml` ejecuta esta regeneración automáticamente cuando cambian los payloads HTML o el propio generador. Si el resultado cambia, GitHub Actions sobrescribe y versiona `validador_distribuible.html` en la rama activa.
+Además, `.github/workflows/build-distributable-html.yml` ejecuta esta regeneración automáticamente cuando cambian los payloads HTML, el propio generador o el parche de fines de semana. Si el resultado cambia, GitHub Actions sobrescribe y versiona `validador_distribuible.html` en la rama activa.
 
 ## Regla de mantenimiento
 
 A partir de esta versión, cualquier cambio funcional o de presentación que afecte al validador debe evaluarse y, cuando aplique, implementarse en las dos superficies de usuario:
 
 1. Aplicación Streamlit (`dashboard_final.py` y sus módulos de presentación/extensión).
-2. Versión HTML de navegador (`validador_completo_dos_meses.html` y sus `reference_payload_*.js`).
+2. Versión HTML de navegador (`validador_completo_dos_meses.html`, sus `reference_payload_*.js` y los parches aplicados por el generador).
 
 **Toda iteración que cambie el HTML debe terminar con la regeneración de `validador_distribuible.html`.** Ese nombre es estable: se sobrescribe, no se crean copias con sufijos de versión.
 
@@ -35,6 +35,8 @@ La versión actual incorpora:
 - exclusión de semanas completamente vacías de planificación en los análisis temporales;
 - horas contractuales visibles en las tablas de empleado/tienda y orden descendente por contrato;
 - descarga XLSX de las tablas visibles en HTML;
-- reglas editables para fines de semana completos, sábados y domingos libres, recalculadas al modificar sus parámetros.
+- reglas editables para fines de semana completos, sábados libres, domingos libres y un número mínimo de sábados o domingos libres;
+- opción para exigir que los días usados por la regla «sábados o domingos» pertenezcan a fines de semana distintos;
+- asignación de días concretos entre reglas sin reutilizar el mismo sábado o domingo, buscando una combinación válida antes de levantar una incidencia de combinación.
 
-SHA-256 del HTML fuente reconstruido: `f70cb40696250e6b7cdfe70fd9875db82070497a3e709b1cabb1e381e746b650`.
+SHA-256 del HTML fuente reconstruido: `dd663c22a014f634ebf1dca766174634e8fadb498d87a26bf069b0263f0fcf91`.
