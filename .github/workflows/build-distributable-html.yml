@@ -6,7 +6,6 @@ on:
       - 'html_assets/reference_payload_*.js'
       - 'scripts/build_distributable_html.py'
       - 'scripts/weekend_html_patch.py'
-      - 'scripts/fix_weekend_html_anchor.py'
       - '.github/workflows/build-distributable-html.yml'
   workflow_dispatch:
 
@@ -28,22 +27,17 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: Fix weekend renderer anchor
-        run: python scripts/fix_weekend_html_anchor.py
+      - name: Generate single-file HTML
+        run: python scripts/build_distributable_html.py
 
-      - name: Generate and capture diagnostics
-        shell: bash
+      - name: Commit regenerated distributable
         run: |
-          set +e
-          python scripts/build_distributable_html.py > standalone/build_debug.txt 2>&1
-          status=$?
-          echo "exit_status=$status" >> standalone/build_debug.txt
+          if git diff --quiet -- validador_distribuible.html; then
+            echo 'Generated HTML is already up to date.'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add scripts/weekend_html_patch.py standalone/build_debug.txt
-          if [ -f validador_distribuible.html ]; then git add validador_distribuible.html; fi
-          if ! git diff --cached --quiet; then
-            git commit -m 'Corregir y regenerar HTML distribuible'
-            git push origin HEAD:${{ github.ref_name }}
-          fi
-          exit $status
+          git add validador_distribuible.html
+          git commit -m 'Regenerar HTML distribuible'
+          git push origin HEAD:${{ github.ref_name }}
