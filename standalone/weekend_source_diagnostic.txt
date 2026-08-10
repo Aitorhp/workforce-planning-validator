@@ -1,421 +1,705 @@
-MARKER 'Incumplen fines completos'
-function runValidation(data, scheduleSource) {
-    const ex = extractData(data, scheduleSource);
+MARKER 't("Resumen del periodo")'
+function renderWeekends(F){
+  let h=`<div class="subhead">${t("Fines de semana y rotación de descansos")}
+</div>`+help(t("Un fin de semana libre exige no trabajar ni el sábado ni el domingo. Sábados y domingos libres también se cuentan por separado, por empleado y mes."));
 
-    const incidents = runRules(ex.shifts);
+  const {monthly,detail}
+=prepWeekend(F);
 
-    const summaries = buildMonthlySummaries(ex.shifts, ex.employeeMonths, ex.employeeMonthsMeta, incidents);
+  if(!monthly.length) return h+callout("warning",t("No hay información suficiente para calcular fines de semana."));
 
-    const dataDates = collectDataDates(data);
+  const availHours=monthly.map(m=>m.app).filter(v=>v!=null&&isFinite(v));
 
-    const weekly = analyzeWeeklyHours(ex.shifts, ex.employeeMonths, ex.employeeMonthsMeta, dataDates, ex.absences, ex.presence, ex.presenceMeta);
+  const obsMax=availHours.length?Math.max(...availHours):40;
+ const limit=Math.max(80,obsMax);
 
-    const balance = analyzeShiftBalance(ex.shifts);
+  if(S.f.wkendMin==null) S.f.wkendMin=Math.min(30,limit);
 
-    const absenceDaily = analyzeDailyAbsences(ex.absences, dataDates);
+  if(S.f.wkendMax==null) S.f.wkendMax=limit;
 
+  h+=`<div class="controls">
+    <div class="ctrl"><label>${t("Horas contractuales mínimas")}
+</label><input type="number" id="wkendMin" min="0" max="${limit}
+" step="1" value="${S.f.wkendMin}
+"></div>
+    <div class="ctrl"><label>${t("Horas contractuales máximas")}
+</label><input type="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
 
-    const shiftsFrame = ex.shifts.map(s => ({
-      id_tienda: s.store, personId: s.person, applicableWorkingHours: s.applicable,
-      day: dayISO(s.workDay), day_int: s.workDay,
-      hora_inicio: new Date(s.shiftStart).toISOString().slice(0, 19), hora_fin: new Date(s.shiftEnd).toISOString().slice(0, 19),
-      horas_totales: s.workedHours, duracion_descanso: s.breakHours, franja_turno: classifyShiftPeriod(s.shiftStart),
-    }
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
 ));
 
-    const incidentsFrame = incidents.map(i => ({
-      id_tienda: i.store, personId: i.person, mes: i.month, tipo_incidencia: i.type,
-      fecha_inicio: dayISO(i.start), fecha_inicio_int: i.start, fecha_fin: dayISO(i.end), fecha_fin_int: i.end,
-      valor_observado: i.observed, limite: i.limit, detalle: i.detail,
-    }
-));
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
 
-    const absencesFrame = ex.absences.map(a => ({
-      id_tienda: a.store, personId: a.person, fecha: dayISO(a.day), fecha_int: a.day, tipo_ausencia: a.type, estado: a.status,
-    }
-));
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
 
-    return {
-      schedule_source: scheduleSource, store_id: ex.storeId,
-      data_dates: [...dataDates].sort((a, b) => a - b),
-      shifts: shiftsFrame, summaries, incidents: incidentsFrame, weekly,
-      absences: absencesFrame, shift_balance: balance, absence_daily: absenceDaily,
-    }
-;
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
 
-  }
-
-
-  const WFV = {
-    CONFIG, SCHEDULE_SOURCES, detectScheduleSources, runValidation,
-    // utilidades expuestas para la UI
-    parseDay, dayISO, dayYMD, weekStart, weekdayISO, monthKey, isoCalendar, fmtDMY, dayFromYMD,
-  }
-;
-
-  if (typeof module !== "undefined" && module.exports) module.exports = WFV;
-
-  else root.WFV = WFV;
-
-}
-)(typeof self !== "undefined" ? self : this);
-
-
-/* ============================= i18n (ES/EN) ============================= */
-// Enfoque: las cadenas en castellano son la clave canonica. El diccionario EN
-// traduce esa clave cuando LANG==='en'. Si falta una traduccion, se muestra
-// el castellano (fallback seguro), nunca una cadena vacia.
-let LANG = (typeof DEFAULT_LANG !== "undefined" ? DEFAULT_LANG : "es");
-
-const I18N_EN = {
-  // Shell / sidebar
-  "Validador de planificaciones":"Planning Validator","Validador":"Validator",
-  "Planificaciones de personal · restricciones legales":"Staff scheduling · legal constraints",
-  "Planificación (JSON/TXT)":"Schedule (JSON/TXT)","Arrastra o haz clic":"Drag or click",
-  "Fichero JSON o TXT de la tienda":"Store JSON or TXT file",
-  "Sube un fichero para detectar los orígenes de horarios disponibles.":"Upload a file to detect the available schedule sources.",
-  "Origen de horarios a evaluar":"Schedule source to evaluate","Fuentes detectadas":"Detected sources",
-  "Semana a analizar":"Week to analyse","Todas las semanas":"All weeks","Tienda":"Store","Fichero":"File",
-  "⬇ Descargar Excel de detalle":"⬇ Download detail Excel","Reglas activas (lectura)":"Active rules (read-only)",
-  "Máx. días consecutivos":"Max. consecutive days","Duración mínima turno":"Min. shift length",
-  "Duración máxima turno":"Max. shift length","Descanso mínimo":"Min. rest",
-  "Horas semanales: comparación con applicableWorkingHours y tolerancia de 0,01 h.":"Weekly hours: compared against applicableWorkingHours with a 0.01 h tolerance.",
-  "Sin identificar":"Unidentified","Cargando…":"Loading…","Haz clic para cambiar de fichero":"Click to change the file",
-  "No se ha podido leer el fichero.":"The file could not be read.",
-  "Filtro semanal: periodo completo":"Weekly filter: full period",
-  "Filtro activo: {a}
- - {b}
-":"Active filter: {a}
- - {b}
-",
-  "Origen analizado:":"Source analysed:",
-  "Todas las incidencias, horas y visualizaciones corresponden exclusivamente a esta fuente.":"All incidents, hours and charts refer exclusively to this source.",
-  "Tienda {store}
- · Analisis generado {stamp}
- · {wf}
-":"Store {store}
- · Analysis generated {stamp}
- · {wf}
-",
-  // Tabs
-  "Resumen":"Summary","Restricciones":"Constraints","Horas contractuales":"Contracted hours",
-  "Cobertura diaria":"Daily coverage","Balance mañana/tarde":"Morning/afternoon balance",
-  "Ausencias":"Absences","Fines de semana":"Weekends","Metodología":"Methodology","Metodologia":"Methodology",
-  // Incidents
-  "Mas de 5 dias consecutivos":"More than 5 consecutive days",
-  "Turno superior a 7,5 h":"Shift longer than 7.5 h",
-  "Turno inferior a 4 h":"Shift shorter than 4 h",
-  "Descanso inferior a 11 h":"Rest shorter than 11 h",
-  // Days of week
-  "Lunes":"Monday","Martes":"Tuesday","Miercoles":"Wednesday","Miércoles":"Wednesday",
-  "Jueves":"Thursday","Viernes":"Friday","Sabado":"Saturday","Sábado":"Saturday","Domingo":"Sunday",
-  // Common
-  "Sin datos":"No data","No hay datos.":"No data available.",
-
-  // ---- Resumen ----
-  "Empleados":"Employees","Turnos":"Shifts","Personas unicas del fichero":"Unique people in the file",
-  "Dias-persona con horario":"Person-days with a schedule","Horas planificadas":"Planned hours",
-  "Suma neta de segmentos WORK":"Net sum of WORK segments","Sin incidencias":"No incidents",
-  "Con incidencias":"With incidents","Al menos una regla incumplida":"At least one rule broken",
-  "Incidencias":"Incidents","Registros de excepcion":"Exception records",
-  "Incidencias por restriccion":"Incidents by constraint",
-  "Cuenta cuantas excepciones se han generado para el origen de horarios seleccionado. Una persona puede aportar varias incidencias.":"Counts how many exceptions were generated for the selected schedule source. One person can contribute several incidents.",
-  "No se han detectado incidencias.":"No incidents were detected.",
-  "Estado de empleados":"Employee status",
-  "Un empleado se considera sin incidencias solo si cumple las cuatro restricciones en todos los meses analizados.":"An employee counts as incident-free only if they meet all four constraints in every analysed month.",
-  "Cumplimiento semanal":"Weekly compliance",
-  "Porcentaje de registros empleado-semana evaluables cuyas horas planificadas coinciden con el contrato. Se excluyen semanas parciales y contratos no numericos.":"Share of assessable employee-week records whose planned hours match the contract. Partial weeks and non-numeric contracts are excluded.",
-
-  // ---- Restricciones ----
-  "Restricciones":"Constraints",
-  "Las cuatro reglas se aplican de forma identica al origen seleccionado. El denominador del cumplimiento por regla es empleado-mes.":"The four rules apply identically to the selected source. The denominator for each rule's compliance is employee-month.",
-  "Maximo 5 dias consecutivos":"Max. 5 consecutive days","Duracion maxima 7,5 h":"Max. shift length 7.5 h",
-  "Duracion minima 4 h":"Min. shift length 4 h","Descanso minimo 11 h":"Min. rest 11 h",
-  "{n}
- empleado-mes no cumplen":"{n}
- employee-months don't comply",
-  "Detalle reciente":"Recent detail",
-  "Muestra hasta 30 incidencias ordenadas desde la fecha mas reciente. Valor observado y limite permiten entender por que se genero cada excepcion.":"Shows up to 30 incidents ordered from most recent. The observed value and limit explain why each exception was raised.",
-  "No hay incidencias.":"No incidents.",
-  "personId":"Employee ID","Regla":"Rule","Inicio":"Start","Fin":"End","Valor":"Value","Limite":"Limit","Detalle":"Detail",
-  "id_tienda":"Store",
-
-  // ---- Horas contractuales ----
-  "Horas contractuales vs. horas planificadas":"Contracted vs. planned hours",
-  "La unidad de analisis es empleado-semana. Los excesos no compensan deficits de otras semanas o personas. Las ausencias solo aportan contexto y nunca se convierten en horas planificadas.":"The unit of analysis is employee-week. Excesses do not offset shortfalls from other weeks or people. Absences only provide context and are never converted into planned hours.",
-  "No hay registros semanales.":"No weekly records.",
-  "No hay empleado-semanas evaluables: se necesitan siete dias cubiertos y horas contractuales numericas.":"There are no assessable employee-weeks: seven covered days and a numeric contracted hours value are required.",
-  "Empleado-semanas evaluables":"Assessable employee-weeks","{n}
- no evaluables":"{n}
- not assessable",
-  "Coinciden con contrato":"Match contract","Semanas con deficit":"Weeks with a shortfall","{n}
- empleados":"{n}
- employees",
-  "Horas no planificadas":"Unplanned hours","Suma de deficits semanales":"Sum of weekly shortfalls",
-  "Semanas con exceso":"Weeks with an excess","Deficits con ausencia":"Shortfalls with an absence",
-  "Empleados con déficit":"Employees with a shortfall","Al menos una semana por debajo del contrato":"At least one week below contract",
-  "Explicables por ausencias":"Explainable by absences","Horas explicables estimadas":"Estimated explainable hours",
-  "De {n}
- h de déficit":"Of {n}
- h of shortfall",
-  "Prioridad: {p}
- en {s}
- tiene el mayor deficit individual ({v}
- h). La semana mas critica es {ws}
- ({wv}
- h).":"Priority: {p}
- in {s}
- has the largest individual shortfall ({v}
- h). The most critical week is {ws}
- ({wv}
- h).",
-  "Todas las empleado-semanas evaluables alcanzan o superan el contrato.":"All assessable employee-weeks meet or exceed the contract.",
-  "Contrato y planificacion por semana":"Contract and plan by week",
-  "Vista de capacidad total. Puede ocultar compensaciones entre personas, por eso el control principal sigue siendo individual.":"A total-capacity view. It can hide compensations between people, which is why the main control remains individual.",
-  "Horas de contrato":"Contracted hours",
-  "Magnitud de los desajustes":"Size of the mismatches",
-  "Deficit y exceso aparecen en barras separadas, sin apilar ni compensar.":"Shortfall and excess appear as separate bars, not stacked or netted.",
-  "Horas faltantes":"Missing hours","Horas en exceso":"Excess hours",
-  "Mapa de desviacion empleado-semana":"Employee-week deviation map",
-  "Rojo significa déficit, blanco coincidencia y ámbar exceso. Un ✓ identifica una desviación total o parcialmente explicable por ausencias.":"Red means shortfall, white means match, and amber means excess. A ✓ marks a deviation that is fully or partly explainable by absences.",
-  "Mostrar solo empleados con alguna desviacion":"Show only employees with a deviation",
-  "No hay desviaciones con el filtro actual.":"No deviations with the current filter.",
-  "Déficit":"Shortfall","Coincidencia":"Match","Exceso":"Excess",
-  "Detalle empleado-semana":"Employee-week detail",
-  "La columna de explicación indica directamente si las horas teóricas asociadas a ausencias alcanzarían el contrato. Es una señal diagnóstica, no una imputación de trabajo.":"The explanation column shows directly whether the theoretical hours linked to absences would reach the contract. It's a diagnostic signal, not an imputation of hours worked.",
-  "Estado":"Status","Semana":"Week","Buscar empleado":"Search employee","ID empleado":"Employee ID","Todas":"All",
-  "Semana":"Week","Desviacion":"Deviation","Cobertura":"Coverage","Dias ausencia":"Absence days",
-  "Horas teóricas ausencia":"Theoretical absence hours","Planif.+ausencia":"Planned+absence",
-  "Tipos ausencia":"Absence types","Explicación":"Explanation",
-  "Ver {n}
- registros no evaluables":"View {n}
- non-assessable records",
-  "Semanas parciales o contratos no numericos.":"Partial weeks or non-numeric contracts.",
-  "Dias cubiertos":"Days covered","Contrato":"Contract","Planificadas":"Planned",
-  "Coincide":"Match","Faltan horas":"Hours short","Exceso horas":"Hours in excess","No evaluable":"Not assessable","Sin horas contrato":"No contracted hours",
-
-  // ---- Cobertura diaria ----
-  "Cobertura diaria de la planificacion":"Daily schedule coverage",
-  "Cobertura son las horas WORK planificadas cada fecha. Los dias presentes en el JSON sin trabajo se conservan con cero horas.":"Coverage is the planned WORK hours for each date. Dates present in the JSON with no work are kept at zero hours.",
-  "No hay fechas disponibles para analizar la cobertura.":"No dates available to analyse coverage.",
-  "Total del periodo":"Total for the period","Cobertura media diaria":"Average daily coverage",
-  "Sobre {n}
- dias":"Over {n}
- days","Dia de maxima cobertura":"Peak coverage day","Dias con cobertura":"Days with coverage",
-  "Dias sin horas":"Days with no hours","Fechas con 0 h":"Dates with 0 h","Empleados por dia":"Employees per day","Media diaria":"Daily average",
-  "Calendario de horas planificadas":"Planned hours calendar",
-  "Cada celda muestra las horas totales de la tienda. Cero identifica un hueco total de planificacion.":"Each cell shows the store's total hours. Zero identifies a total scheduling gap.",
-  "Evolucion diaria de la cobertura":"Daily coverage trend","Permite detectar picos, caidas y dias con cero horas.":"Helps spot peaks, drops and zero-hour days.",
-  "Patron medio por dia de la semana":"Average pattern by day of week",
-  "Ayuda a comprobar si la estructura semanal es coherente con la operativa retail esperada.":"Helps check whether the weekly structure matches the expected retail operation.",
-  "Duraciones de turno":"Shift lengths","Tabla compacta que sustituye al histograma.":"A compact table replacing the histogram.",
-  "No hay turnos.":"No shifts.","Duracion":"Length","Peso":"Share",
-  "Fuera de limites: {b}
- por debajo de 4 h y {a}
- por encima de 7,5 h.":"Out of range: {b}
- below 4 h and {a}
- above 7.5 h.",
-  "Ver detalle diario":"View daily detail","Fecha":"Date","Dia":"Day","Empleados":"Employees","Duracion media":"Average length",
-
-  // ---- Balance mañana/tarde ----
-  "Balance de turnos de mañana y tarde":"Morning/afternoon shift balance",
-  "Mañana: inicio antes de las 13:00. Tarde: inicio a las 13:00 o después. Las columnas comparan el número medio de turnos de cada franja por semana del periodo seleccionado.":"Morning: starts before 13:00. Afternoon: starts at 13:00 or later. The columns compare the average number of shifts in each slot per week over the selected period.",
-  "No hay turnos disponibles para calcular el balance de franjas.":"No shifts available to calculate the shift-slot balance.",
-  "Con al menos un turno":"With at least one shift","Rotan mañana y tarde":"Rotate morning and afternoon",
-  "Solo mañanas":"Mornings only","Solo tardes":"Afternoons only","Índice de equilibrio":"Balance index",
-  "0 = una franja;
- 100 = reparto 50/50":"0 = a single slot;
- 100 = a 50/50 split",
-  "Hay {n}
- empleados sin rotación: {m}
- solo de mañana y {a}
- solo de tarde.":"There are {n}
- employees with no rotation: {m}
- mornings only and {a}
- afternoons only.",
-  "Todos los empleados tienen al menos un turno de mañana y uno de tarde.":"Every employee has at least one morning and one afternoon shift.",
-  "Mañana y tarde":"Morning and afternoon",
-  "Promedio semanal por empleado":"Weekly average per employee",
-  "La tabla permite localizar rápidamente empleados sin mañanas o sin tardes. Cero identifica ausencia total de esa franja en el periodo seleccionado.":"The table quickly locates employees with no mornings or no afternoons. Zero identifies a total absence of that slot in the selected period.",
-  "Empleado":"Employee","Mañanas/sem":"Mornings/wk","Tardes/sem":"Afternoons/wk",
-  "Mañanas tot.":"Mornings total","Tardes tot.":"Afternoons total","Rotación":"Rotation",
-  "Promedio calculado sobre {n}
- semana(s) del periodo seleccionado.":"Average calculated over {n}
- week(s) of the selected period.",
-  "Detalle por empleado":"Detail by employee","Mostrar solo empleados sin rotación":"Show only employees with no rotation",
-  "Mañana":"Morning","Tarde":"Afternoon","Totales":"Totals","Horas mañana":"Morning hours","Horas tarde":"Afternoon hours",
-  "% mañana":"% morning","% tarde":"% afternoon",
-  "Mañana y tarde":"Morning and afternoon","Solo mañanas":"Mornings only","Solo tardes":"Afternoons only",
-
-  // ---- Cambios contractuales y franjas configurables ----
-  "Cambios de horas contractuales entre meses consecutivos":"Changes in contracted hours between consecutive months",
-  "Esta tabla muestra únicamente empleados cuyo applicableWorkingHours cambia entre dos meses consecutivos. El cambio es una alerta de calidad del dato y no modifica los cálculos del motor.":"This table only shows employees whose applicableWorkingHours changes between two consecutive months. The change is a data-quality alert and does not alter engine calculations.",
-  "No se han detectado cambios de horas contractuales entre meses consecutivos.":"No changes in contracted hours were detected between consecutive months.",
-  "Hay {n}
- cambio(s) contractual(es) que requieren revisión.":"There are {n}
- contracted-hours change(s) requiring review.",
-  "Mes anterior":"Previous month","Horas mes anterior":"Previous contracted hours",
-  "Mes siguiente":"Next month","Horas mes siguiente":"Next contracted hours",
-  "Diferencia":"Difference","REVISAR CAMBIO DE CONTRATO":"REVIEW CONTRACT CHANGE",
-  "Balance de turnos de mañana, central y tarde":"Morning, central and afternoon shift balance",
-  "La clasificación usa la hora de inicio del turno. Mañana es estrictamente anterior al primer corte, tarde es estrictamente posterior al segundo y los límites, junto con las horas intermedias, son centrales.":"Classification uses the shift start time. Morning is strictly before the first cut-off, afternoon is strictly after the second, and both limits plus the hours between them are central.",
-  "Los turnos de mañana empiezan antes de":"Morning shifts start before",
-  "Los turnos de tarde empiezan después de":"Afternoon shifts start after",
-  "El corte de mañana debe ser anterior al corte de tarde.":"The morning cut-off must be earlier than the afternoon cut-off.",
-  "Regla activa: mañana < {m}
-;
- central entre {m}
- y {a}
-, incluidos ambos límites;
- tarde > {a}
-.":"Active rule: morning < {m}
-;
- central between {m}
- and {a}
-, including both limits;
- afternoon > {a}
-.",
-  "Turnos de mañana":"Morning shifts","Turnos centrales":"Central shifts","Turnos de tarde":"Afternoon shifts",
-  "Con tres franjas":"With all three slots","Con dos franjas":"With two slots","Con una franja":"With one slot",
-  "Índice de equilibrio de tres franjas":"Three-slot balance index",
-  "0 = una sola franja;
- 100 = reparto uniforme":"0 = one slot only;
- 100 = even distribution",
-  "Hay {n}
- empleados a los que les falta al menos una franja.":"There are {n}
- employees missing at least one slot.",
-  "Todos los empleados tienen turnos en las tres franjas.":"All employees have shifts in all three slots.",
-  "Tres franjas":"Three slots","Dos franjas":"Two slots","Una franja":"One slot",
-  "Centrales/sem":"Central/wk","Centrales tot.":"Central total","Central":"Central",
-  "Horas central":"Central hours","% central":"% central","Franjas cubiertas":"Slots covered","Faltan franjas":"Missing slots",
-  "Mostrar solo empleados con alguna franja ausente":"Show only employees missing at least one slot",
-  "Configuración de franjas":"Shift-slot configuration",
-  "Cambios contractuales":"Contract changes",
-  // ---- Ausencias ----
-  "Ausencias":"Absences",
-  "Las ausencias proceden siempre de dayTimes.absences y no cambian al alternar el origen de horarios. Lo que si puede cambiar es si una ausencia coincide o no con un turno del origen seleccionado.":"Absences always come from dayTimes.absences and don't change when you switch schedule source. What can change is whether an absence overlaps a shift in the selected source.",
-  "Registros de ausencia":"Absence records","Estados VALIDATED o APPROVED":"VALIDATED or APPROVED status",
-  "Empleados afectados":"Affected employees","Personas con alguna ausencia":"People with at least one absence",
-  "Media fines de semana libres":"Average free weekends","Por empleado-mes":"Per employee-month",
-  "Sin fin de semana completo":"With no full weekend off","Registros empleado-mes":"Employee-month records",
-  "Calendario diario de ausencias":"Daily absence calendar",
-  "Cada celda muestra empleados únicos ausentes;
- los días sin ausencias se conservan con cero.":"Each cell shows unique absent employees;
- days with no absences are kept at zero.",
-  "Ausencias por tipo":"Absences by type",
-  "Cuenta registros de ausencia por tipo. Dos tipos distintos en una misma fecha se mantienen como dos registros.":"Counts absence records by type. Two different types on the same date are kept as two records.",
-
-  // ---- Fines de semana ----
-  "Fines de semana y rotación de descansos":"Weekends and rest rotation",
-  "Descargar tabla":"Download table","Tabla":"Table","Solo semanas con planificación":"Only weeks with planning",
-  "Semanas activas":"Active weeks","Semanas con al menos un turno planificado":"Weeks with at least one planned shift","Días con ausencias":"Days with absences","Dentro de semanas activas":"Within active weeks",
-  "Reglas de descanso de fin de semana":"Weekend rest rules","Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla.":"Type the minimum required for the analysed period. A value of 0 disables the rule.",
-  "Mínimo fines de semana completos libres":"Minimum full weekends off","Mínimo sábados libres":"Minimum Saturdays off","Mínimo domingos libres":"Minimum Sundays off","Regla activa":"Active rule","Mínimo":"Minimum",
-  "Con alguna incidencia":"With an issue","Incumplen fines completos":"Fail full-weekend rule","Incumplen sábados":"Fail Saturday rule","Incumplen domingos":"Fail Sunday rule",
-  "Incidencias según las reglas introducidas":"Issues under the entered rules","Las pestañas se recalculan inmediatamente al cambiar cualquiera de los tres mínimos.":"The tabs recalculate immediately when any of the three minimums changes.",
-  "Fines completos":"Full weekends","Sábados":"Saturdays","Domingos":"Sundays","Mostrar solo empleado-mes con alguna incidencia":"Show only employee-month rows with an issue",
-  "Las semanas completamente vacías de planificación se excluyen de cobertura, ausencias, balance y fines de semana.":"Completely empty planning weeks are excluded from coverage, absences, balance and weekend analysis.","Reglas de fin de semana":"Weekend rules","fines completos":"full weekends","sábados libres":"Saturdays off","domingos libres":"Sundays off",
-  "Un fin de semana libre exige no trabajar ni el sábado ni el domingo. Sábados y domingos libres también se cuentan por separado, por empleado y mes.":"A free weekend requires not working either Saturday or Sunday. Free Saturdays and Sundays are also counted separately, per employee and month.",
-  "No hay información suficiente para calcular fines de semana.":"Not enough information to calculate weekends.",
-  "Horas contractuales mínimas":"Minimum contracted hours","Horas contractuales máximas":"Maximum contracted hours",
-  "Las horas mínimas no pueden ser superiores a las horas máximas.":"The minimum hours cannot be higher than the maximum hours.",
-  "No hay empleados que cumplan el rango contractual seleccionado.":"No employees match the selected contract range.",
-  "Empleados analizados":"Employees analysed","Contrato entre {a}
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
  y {b}
- h":"Contract between {a}
- and {b}
- h",
-  "Sin fin de semana libre":"With no free weekend","Sin sábado libre":"With no free Saturday",
-  "Entre quienes no libran un fin de semana completo":"Among those with no full weekend off",
-  "Sin domingo libre":"With no free Sunday","Sin sábado ni domingo":"With neither Saturday nor Sunday off",
-  "No libran ningún día de fin de semana":"Don't have a single weekend day off",
-  "Rotación por fin de semana":"Rotation by weekend",
-  "Fin de semana completo":"Full weekend off","Sábado libre":"Saturday off","Domingo libre":"Sunday off",
-  "Mapa empleado-fin de semana":"Employee-weekend map","0 días":"0 days","1 día":"1 day","2 días":"2 days",
-  "Diagnóstico rápido de empleados sin fin de semana completo":"Quick diagnosis of employees with no full weekend off",
-  "Las pestañas parten únicamente de empleados que no tienen ningún sábado y domingo libres en el mismo fin de semana durante el periodo analizado.":"These tabs only cover employees who never have both Saturday and Sunday off on the same weekend during the analysed period.",
-  "Todos":"All","Sin sábados":"No Saturdays off","Sin domingos":"No Sundays off","Sin ningún día":"No day off",
-  "No hay empleados en esta categoría.":"No employees in this category.",
-  "Tienda":"Store","Fines completos libres":"Full weekends off","Sábados libres":"Saturdays off","Domingos libres":"Sundays off",
-  "Resumen empleado-mes":"Employee-month summary","Mostrar solo empleado-mes con alguna incidencia":"Show only employee-months with a counter at zero",
-  "Sin alertas":"No alerts","Mes":"Month","Fines libres":"Weekends off","Fines eval.":"Weekends assessed",
-  "Sábados eval.":"Saturdays assessed","Domingos eval.":"Sundays assessed","Alerta":"Alert",
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
+,
+    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqFull}
+`,tone:nWk.length?"red":"green"}
+,
+    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSat}
+`,tone:nSat.length?"red":"green"}
+,
+    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSun}
+`,tone:nSun.length?"red":"green"}
+,
+  ],5);
 
-  // ---- Metodología ----
-  "Metodologia":"Methodology","Origen seleccionado:":"Selected source:","El motor lee exclusivamente":"The engine reads exclusively",
-  "Solo se utilizan segmentos con":"Only segments with","La duracion diaria es la suma neta de los segmentos seleccionados.":"The daily length is the net sum of the selected segments.",
-  "Se aplican las mismas reglas: maximo 5 dias consecutivos, entre 4 y 7,5 horas por turno y al menos 11 horas entre jornadas.":"The same rules apply: max. 5 consecutive days, between 4 and 7.5 hours per shift, and at least 11 hours between shifts.",
-  "El control semanal compara las horas del origen seleccionado con":"The weekly check compares the hours from the selected source with",
-  "Las ausencias no se suman a la planificacion;
- solo se usan como posible explicacion del deficit.":"Absences are not added to the schedule;
- they are only used as a possible explanation for the shortfall.",
-  "Cambiar el selector vuelve a ejecutar todo el analisis sin mezclar fuentes.":"Changing the selector re-runs the whole analysis without mixing sources.",
-  "Réplica HTML autónoma del validador Streamlit. Cálculos verificados contra el motor Python original (paridad byte a byte en turnos, incidencias, horas semanales, balance y ausencias).":"A self-contained HTML replica of the Streamlit validator. Calculations verified against the original Python engine (byte-for-byte parity on shifts, incidents, weekly hours, balance and absences).",
+  if(wends.length){
+    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
+</h3>`;
 
-  // ---- Weekly explanation labels ----
-  "Sí, explica todo el déficit":"Yes, explains the whole shortfall","Explica parte del déficit":"Explains part of the shortfall",
-  "Sin estimación disponible":"No estimate available","Ausente todo el periodo":"Absent for the whole period",
-  "No explicado por ausencias":"Not explained by absences","Contrato cubierto o con exceso":"Contract met or exceeded",
-  "No aplica":"Not applicable","Con ausencia registrada":"With a recorded absence","Sin ausencia registrada":"With no recorded absence",
+    const gw=groupBy(wends,d=>d.ini);
+ const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
+)).sort((a,b)=>a.ini-b.ini);
 
-  // ---- Errors / loading ----
-  "JSON no valido: {e}
-":"Invalid JSON: {e}
-","La raiz del JSON debe ser un objeto.":"The JSON root must be an object.",
-  "No se han encontrado segmentos WORK en planned ni plannedDraft.":"No WORK segments were found in planned or plannedDraft.",
-  "Planificaciones (JSON/TXT)":"Schedules (JSON/TXT)",
-  "Plan publicado":"Published plan","Borrador del planificador":"Planner draft",
-  "Arrastra uno o dos ficheros":"Drag one or two files",
-  "Meses consecutivos de la misma tienda, sin fechas solapadas":"Consecutive months from the same store, with no overlapping dates",
-  "Sube uno o dos ficheros para detectar los orígenes de horarios disponibles.":"Upload one or two files to detect the available schedule sources.",
-  "Solo se admite un máximo de dos ficheros.":"A maximum of two files is allowed.",
-  "Cada fichero debe contener un único mes calendario.":"Each file must contain exactly one calendar month.",
-  "Los dos ficheros deben pertenecer a la misma tienda.":"Both files must belong to the same store.",
-  "Los meses deben ser consecutivos.":"The months must be consecutive.",
-  "Los periodos de los ficheros no pueden solaparse.":"The file periods must not overlap.",
-  "No se han encontrado fechas operativas en el fichero.":"No operating dates were found in the file.",
-  "El fichero no identifica la tienda.":"The file does not identify the store.",
-  "El campo storeDayTimes debe ser una lista.":"The storeDayTimes field must be a list.",
-  "Ficheros":"Files","Periodo combinado":"Combined period",
-  "Se han combinado {n}
- ficheros de la misma tienda para analizar el periodo completo.":"{n}
- files from the same store have been combined to analyse the full period.",
-  "Un fichero de la tienda se analiza como periodo independiente.":"One store file is analysed as a standalone period.",
-  "Déficit, exceso y horas estimadas de ausencia aparecen en barras separadas, sin apilar ni compensar. La estimación de ausencia no se suma a las horas trabajadas.":"Shortfall, excess and estimated absence hours are shown as separate bars, without stacking or netting. Absence estimates are not added to worked hours.",
-  "Horas estimadas de ausencia":"Estimated absence hours",
-  "Hay {n}
- empleado-semana con ausencia sin una estimación fiable de horas;
- su valor no se incorpora a la barra de ausencias.":"There are {n}
- employee-week records with an absence but no reliable hours estimate;
- their value is not included in the absence bar.",
-  "Hay {n}
- empleado-semanas con ausencia sin una estimación fiable de horas;
- su valor no se incorpora a la barra de ausencias.":"There are {n}
- employee-week records with an absence but no reliable hours estimate;
- their value is not included in the absence bar.",
-  "Buscar empleado en el mapa":"Search employee in the map","Mostrar solo alertas":"Show alerts only",
-  "Fines completos":"Full weekends","Resumen del periodo":"Period summary",
-  "Fines completos: {n}
- de {total}
-":"Full weekends: {n}
- of {total}
-",
-  "El mapa mantiene fijas las columnas de empleado y contrato. Una fila es alerta si incumple cualquiera de los tres mínimos activos.":"The employee and contract columns remain fixed. Rows with zero full weekends off are treated as alerts.",
+    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
+))}
+,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
+))}
+,{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}
+))}
+],rot.map(r=>r.label),{h:390,dec:0}
+)+`</div>`;
 
-  // ---- Excel export ----
-  "Informacion":"Information","Origen analizado":"Source analysed","Descripcion":"Description",
-  "Turnos":"Shifts","Validacion mensual":"Monthly validation","Detalle incidencias":"Incident detail",
-  "Control horas semanal":"Weekly hours control","Ausencias":"Absences","Sin registros":"No records",
-}
+    // Mapa HTML con cabecera y columnas fijas, búsqueda y alertas.
+    h+=`<div class="block"><h3>${t("Mapa empleado-fin de semana")}
+</h3>`+help(t("El mapa mantiene fijas las columnas de empleado y contrato. Las filas con cero fines de semana completos se consideran alertas."));
+
+    const order=[...groupBy(wends,d=>d.ini).entries()].sort((a,b)=>Number(a[0])-Number(b[0])).map(([,rs])=>rs[0].fin);
+
+    const pv=new Map();
+ wends.forEach(d=>pv.set((d.id_tienda+"|"+d.personId)+"|"+d.fin,(d.sat?1:0)+(d.sun?1:0)));
+
+    const mapRows=employees.map(e=>{
+      const key=e.id_tienda+"|"+e.personId;
+
+      const values=order.map(w=>pv.has(key+"|"+w)?pv.get(key+"|"+w):null);
+
+      const full=values.filter(v=>v===2).length;
+
+      const freeDays=sum(values.filter(v=>v!=null));
+
+      return {...e,key,values,full,freeDays,alert:failWk(e)||failSat(e)||failSun(e)}
 ;
 
-const DOW_INI_EN = ["M","T","W","T","F","S","S"];
+    }
+).sort((a,b)=>Number(b.alert)-Number(a.alert)||a.full-b.full||a.freeDays-b.freeDays||String(a.personId).localeCompare(String(b.personId)));
 
+    h+=`<div class="wkmap-controls"><input type="search" id="wkendMapSearch" placeholder="${t("Buscar empleado en el mapa")}
+" value="${esc(S.f.wkendMapQuery||"")}
+"><label class="chk"><input type="checkbox" id="wkendMapAlerts" ${S.f.wkendMapAlerts?"checked":""}
+> ${t("Mostrar solo alertas")}
+</label></div>`;
+
+    h+=`<div class="wkmap-wrap"><table class="wkmap" id="weekendMapTable"><thead><tr><th class="wk-employee">${t("Empleado")}
+</th><th class="wk-contract">${t("Horas contrato")}
+</th>`+
+      order.map(w=>`<th>${esc(w)}
+</th>`).join("")+`<th>${t("Resumen del periodo")}
+</th></tr></thead><tbody>`;
+
+    mapRows.forEach(row=>{
+      h+=`<tr data-search="${esc((row.id_tienda+" "+row.personId).toLowerCase())}
+" data-alert="${row.alert?"1":"0"}
+"><td class="wk-employee">${esc(row.id_tienda+" · "+row.personId)}
+${row.alert?`<span class="wk-alert">${t("Alerta")}
+</span>`:""}
+</td><td class="wk-contract">${row.app==null?"—":fmt(row.app,1)+" h"}
+</td>`;
+
+      row.values.forEach(v=>{ h+=`<td>${v==null?"":`<span class="wk-cell wk-${v}
+">${v}
+</span>`}
+</td>`;
+ }
+);
+
+      h+=`<td>${t("Fines completos: {n}
+ de {total}
+",{n:row.full,total:order.length}
+)}
+</td></tr>`;
+
+    }
+);
+
+    h+=`</tbody></table></div>`+legend([{label:t("0 días"),color:"#d8e1ec"}
+,{label:t("1 día"),color:"#8dbcf6"}
+,{label:t("2 días"),color:"#244ed8"}
+])+`</div>`;
+
+  }
+
+  // diagnostic tabs
+  h+=`<div class="block"><h3>${t("Incidencias según las reglas introducidas")}
+</h3>`+help(t("Las pestañas se recalculan inmediatamente al cambiar cualquiera de los tres mínimos."));
+
+  const diagSets=[[t("Todas"),nAny],[t("Fines completos"),nWk],[t("Sábados"),nSat],[t("Domingos"),nSun]];
+
+  h+=`<div class="chips" id="wkendDiag">`+diagSets.map((d,i)=>`<span class="chip ${S.f.wkendDiag===i?"on":""}
+" data-i="${i}
+">${d[0]}
+ (${d[1].length}
+)</span>`).join("")+`</div>`;
+
+  const cur=diagSets[S.f.wkendDiag][1];
+
+  if(!cur.length) h+=callout("info",t("No hay empleados en esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
 
 ===== WEEKEND FUNCTION =====
 
-MARKER 'Mínimo de fines de semana completos': NOT FOUND
+MARKER 't("Mapa empleado-fin de semana")'
+function renderWeekends(F){
+  let h=`<div class="subhead">${t("Fines de semana y rotación de descansos")}
+</div>`+help(t("Un fin de semana libre exige no trabajar ni el sábado ni el domingo. Sábados y domingos libres también se cuentan por separado, por empleado y mes."));
+
+  const {monthly,detail}
+=prepWeekend(F);
+
+  if(!monthly.length) return h+callout("warning",t("No hay información suficiente para calcular fines de semana."));
+
+  const availHours=monthly.map(m=>m.app).filter(v=>v!=null&&isFinite(v));
+
+  const obsMax=availHours.length?Math.max(...availHours):40;
+ const limit=Math.max(80,obsMax);
+
+  if(S.f.wkendMin==null) S.f.wkendMin=Math.min(30,limit);
+
+  if(S.f.wkendMax==null) S.f.wkendMax=limit;
+
+  h+=`<div class="controls">
+    <div class="ctrl"><label>${t("Horas contractuales mínimas")}
+</label><input type="number" id="wkendMin" min="0" max="${limit}
+" step="1" value="${S.f.wkendMin}
+"></div>
+    <div class="ctrl"><label>${t("Horas contractuales máximas")}
+</label><input type="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
+,
+    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqFull}
+`,tone:nWk.length?"red":"green"}
+,
+    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSat}
+`,tone:nSat.length?"red":"green"}
+,
+    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSun}
+`,tone:nSun.length?"red":"green"}
+,
+  ],5);
+
+  if(wends.length){
+    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
+</h3>`;
+
+    const gw=groupBy(wends,d=>d.ini);
+ const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
+)).sort((a,b)=>a.ini-b.ini);
+
+    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
+))}
+,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
+))}
+,{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}
+))}
+],rot.map(r=>r.label),{h:390,dec:0}
+)+`</div>`;
+
+    // Mapa HTML con cabecera y columnas fijas, búsqueda y alertas.
+    h+=`<div class="block"><h3>${t("Mapa empleado-fin de semana")}
+</h3>`+help(t("El mapa mantiene fijas las columnas de empleado y contrato. Las filas con cero fines de semana completos se consideran alertas."));
+
+    const order=[...groupBy(wends,d=>d.ini).entries()].sort((a,b)=>Number(a[0])-Number(b[0])).map(([,rs])=>rs[0].fin);
+
+    const pv=new Map();
+ wends.forEach(d=>pv.set((d.id_tienda+"|"+d.personId)+"|"+d.fin,(d.sat?1:0)+(d.sun?1:0)));
+
+    const mapRows=employees.map(e=>{
+      const key=e.id_tienda+"|"+e.personId;
+
+      const values=order.map(w=>pv.has(key+"|"+w)?pv.get(key+"|"+w):null);
+
+      const full=values.filter(v=>v===2).length;
+
+      const freeDays=sum(values.filter(v=>v!=null));
+
+      return {...e,key,values,full,freeDays,alert:failWk(e)||failSat(e)||failSun(e)}
+;
+
+    }
+).sort((a,b)=>Number(b.alert)-Number(a.alert)||a.full-b.full||a.freeDays-b.freeDays||String(a.personId).localeCompare(String(b.personId)));
+
+    h+=`<div class="wkmap-controls"><input type="search" id="wkendMapSearch" placeholder="${t("Buscar empleado en el mapa")}
+" value="${esc(S.f.wkendMapQuery||"")}
+"><label class="chk"><input type="checkbox" id="wkendMapAlerts" ${S.f.wkendMapAlerts?"checked":""}
+> ${t("Mostrar solo alertas")}
+</label></div>`;
+
+    h+=`<div class="wkmap-wrap"><table class="wkmap" id="weekendMapTable"><thead><tr><th class="wk-employee">${t("Empleado")}
+</th><th class="wk-contract">${t("Horas contrato")}
+</th>`+
+      order.map(w=>`<th>${esc(w)}
+</th>`).join("")+`<th>${t("Resumen del periodo")}
+</th></tr></thead><tbody>`;
+
+    mapRows.forEach(row=>{
+      h+=`<tr data-search="${esc((row.id_tienda+" "+row.personId).toLowerCase())}
+" data-alert="${row.alert?"1":"0"}
+"><td class="wk-employee">${esc(row.id_tienda+" · "+row.personId)}
+${row.alert?`<span class="wk-alert">${t("Alerta")}
+</span>`:""}
+</td><td class="wk-contract">${row.app==null?"—":fmt(row.app,1)+" h"}
+</td>`;
+
+      row.values.forEach(v=>{ h+=`<td>${v==null?"":`<span class="wk-cell wk-${v}
+">${v}
+</span>`}
+</td>`;
+ }
+);
+
+      h+=`<td>${t("Fines completos: {n}
+ de {total}
+",{n:row.full,total:order.length}
+)}
+</td></tr>`;
+
+    }
+);
+
+    h+=`</tbody></table></div>`+legend([{label:t("0 días"),color:"#d8e1ec"}
+,{label:t("1 día"),color:"#8dbcf6"}
+,{label:t("2 días"),color:"#244ed8"}
+])+`</div>`;
+
+  }
+
+  // diagnostic tabs
+  h+=`<div class="block"><h3>${t("Incidencias según las reglas introducidas")}
+</h3>`+help(t("Las pestañas se recalculan inmediatamente al cambiar cualquiera de los tres mínimos."));
+
+  const diagSets=[[t("Todas"),nAny],[t("Fines completos"),nWk],[t("Sábados"),nSat],[t("Domingos"),nSun]];
+
+  h+=`<div class="chips" id="wkendDiag">`+diagSets.map((d,i)=>`<span class="chip ${S.f.wkendDiag===i?"on":""}
+" data-i="${i}
+">${d[0]}
+ (${d[1].length}
+)</span>`).join("")+`</div>`;
+
+  const cur=diagSets[S.f.wkendDiag][1];
+
+  if(!cur.length) h+=callout("info",t("No hay empleados en esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
 
 ===== WEEKEND FUNCTION =====
 
-MARKER 'fines_semana_libres': NOT FOUND
+MARKER 't("Fines completos")'
+function renderWeekends(F){
+  let h=`<div class="subhead">${t("Fines de semana y rotación de descansos")}
+</div>`+help(t("Un fin de semana libre exige no trabajar ni el sábado ni el domingo. Sábados y domingos libres también se cuentan por separado, por empleado y mes."));
+
+  const {monthly,detail}
+=prepWeekend(F);
+
+  if(!monthly.length) return h+callout("warning",t("No hay información suficiente para calcular fines de semana."));
+
+  const availHours=monthly.map(m=>m.app).filter(v=>v!=null&&isFinite(v));
+
+  const obsMax=availHours.length?Math.max(...availHours):40;
+ const limit=Math.max(80,obsMax);
+
+  if(S.f.wkendMin==null) S.f.wkendMin=Math.min(30,limit);
+
+  if(S.f.wkendMax==null) S.f.wkendMax=limit;
+
+  h+=`<div class="controls">
+    <div class="ctrl"><label>${t("Horas contractuales mínimas")}
+</label><input type="number" id="wkendMin" min="0" max="${limit}
+" step="1" value="${S.f.wkendMin}
+"></div>
+    <div class="ctrl"><label>${t("Horas contractuales máximas")}
+</label><input type="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
+,
+    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqFull}
+`,tone:nWk.length?"red":"green"}
+,
+    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSat}
+`,tone:nSat.length?"red":"green"}
+,
+    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSun}
+`,tone:nSun.length?"red":"green"}
+,
+  ],5);
+
+  if(wends.length){
+    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
+</h3>`;
+
+    const gw=groupBy(wends,d=>d.ini);
+ const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
+)).sort((a,b)=>a.ini-b.ini);
+
+    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
+))}
+,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
+))}
+,{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}
+))}
+],rot.map(r=>r.label),{h:390,dec:0}
+)+`</div>`;
+
+    // Mapa HTML con cabecera y columnas fijas, búsqueda y alertas.
+    h+=`<div class="block"><h3>${t("Mapa empleado-fin de semana")}
+</h3>`+help(t("El mapa mantiene fijas las columnas de empleado y contrato. Las filas con cero fines de semana completos se consideran alertas."));
+
+    const order=[...groupBy(wends,d=>d.ini).entries()].sort((a,b)=>Number(a[0])-Number(b[0])).map(([,rs])=>rs[0].fin);
+
+    const pv=new Map();
+ wends.forEach(d=>pv.set((d.id_tienda+"|"+d.personId)+"|"+d.fin,(d.sat?1:0)+(d.sun?1:0)));
+
+    const mapRows=employees.map(e=>{
+      const key=e.id_tienda+"|"+e.personId;
+
+      const values=order.map(w=>pv.has(key+"|"+w)?pv.get(key+"|"+w):null);
+
+      const full=values.filter(v=>v===2).length;
+
+      const freeDays=sum(values.filter(v=>v!=null));
+
+      return {...e,key,values,full,freeDays,alert:failWk(e)||failSat(e)||failSun(e)}
+;
+
+    }
+).sort((a,b)=>Number(b.alert)-Number(a.alert)||a.full-b.full||a.freeDays-b.freeDays||String(a.personId).localeCompare(String(b.personId)));
+
+    h+=`<div class="wkmap-controls"><input type="search" id="wkendMapSearch" placeholder="${t("Buscar empleado en el mapa")}
+" value="${esc(S.f.wkendMapQuery||"")}
+"><label class="chk"><input type="checkbox" id="wkendMapAlerts" ${S.f.wkendMapAlerts?"checked":""}
+> ${t("Mostrar solo alertas")}
+</label></div>`;
+
+    h+=`<div class="wkmap-wrap"><table class="wkmap" id="weekendMapTable"><thead><tr><th class="wk-employee">${t("Empleado")}
+</th><th class="wk-contract">${t("Horas contrato")}
+</th>`+
+      order.map(w=>`<th>${esc(w)}
+</th>`).join("")+`<th>${t("Resumen del periodo")}
+</th></tr></thead><tbody>`;
+
+    mapRows.forEach(row=>{
+      h+=`<tr data-search="${esc((row.id_tienda+" "+row.personId).toLowerCase())}
+" data-alert="${row.alert?"1":"0"}
+"><td class="wk-employee">${esc(row.id_tienda+" · "+row.personId)}
+${row.alert?`<span class="wk-alert">${t("Alerta")}
+</span>`:""}
+</td><td class="wk-contract">${row.app==null?"—":fmt(row.app,1)+" h"}
+</td>`;
+
+      row.values.forEach(v=>{ h+=`<td>${v==null?"":`<span class="wk-cell wk-${v}
+">${v}
+</span>`}
+</td>`;
+ }
+);
+
+      h+=`<td>${t("Fines completos: {n}
+ de {total}
+",{n:row.full,total:order.length}
+)}
+</td></tr>`;
+
+    }
+);
+
+    h+=`</tbody></table></div>`+legend([{label:t("0 días"),color:"#d8e1ec"}
+,{label:t("1 día"),color:"#8dbcf6"}
+,{label:t("2 días"),color:"#244ed8"}
+])+`</div>`;
+
+  }
+
+  // diagnostic tabs
+  h+=`<div class="block"><h3>${t("Incidencias según las reglas introducidas")}
+</h3>`+help(t("Las pestañas se recalculan inmediatamente al cambiar cualquiera de los tres mínimos."));
+
+  const diagSets=[[t("Todas"),nAny],[t("Fines completos"),nWk],[t("Sábados"),nSat],[t("Domingos"),nSun]];
+
+  h+=`<div class="chips" id="wkendDiag">`+diagSets.map((d,i)=>`<span class="chip ${S.f.wkendDiag===i?"on":""}
+" data-i="${i}
+">${d[0]}
+ (${d[1].length}
+)</span>`).join("")+`</div>`;
+
+  const cur=diagSets[S.f.wkendDiag][1];
+
+  if(!cur.length) h+=callout("info",t("No hay empleados en esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
