@@ -61,6 +61,14 @@ def test_distributable_html_contains_equivalent_contract_heatmap_controls():
     assert 'const weekLabels=totals.map(x=>dmy(x.inicio));' in source
     assert 'join(" → ")+" h"' in source
 
+    # El panel lateral del HTML puede plegarse y volver a desplegarse.
+    assert 'id="wfv-collapsible-sidebar-style"' in source
+    assert 'id="wfvSidebarToggle"' in source
+    assert 'wfv-sidebar-collapsed' in source
+    assert 'Mostrar panel / Show panel' in source
+    assert 'Ocultar panel / Hide panel' in source
+    assert 'window.dispatchEvent(new Event("resize"))' in source
+
     # El payload generado debe seguir siendo un gzip HTML autocontenido válido.
     decoded = gzip.decompress(base64.b64decode(patched)).decode("utf-8")
     assert decoded == source
