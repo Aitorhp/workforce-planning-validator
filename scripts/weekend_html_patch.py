@@ -184,15 +184,14 @@ def patch_weekend_assignment(source: str) -> str:
     anchor = '  // ---- Metodología ----\n'
     source = _replace(source, anchor, translations + '\n' + anchor, expected=1, label="traducciones")
 
-    pattern = re.compile(
-        r'function renderWeekends\(F\)\{.*?\n\}\n\n\n/\* ---------- Metodología ---------- \*/',
-        re.S,
-    )
-    matches = pattern.findall(source)
-    if len(matches) != 1:
-        raise ValueError(
-            f"Parche HTML de fines de semana: se esperaba un renderWeekends y se encontraron {len(matches)}"
-        )
-    return pattern.sub(
-        WEEKEND_RENDER + '\n\n\n/* ---------- Metodología ---------- */', source, count=1
-    )
+    start_marker = "function renderWeekends(F){"
+    end_marker = "/* ---------- Metodología ---------- */"
+    render_start = source.find(start_marker)
+    if render_start < 0:
+        raise ValueError("Parche HTML de fines de semana: no se encontró renderWeekends")
+    render_end = source.find(end_marker, render_start)
+    if render_end < 0:
+        raise ValueError("Parche HTML de fines de semana: no se encontró el final de renderWeekends")
+    if source.find(start_marker, render_start + len(start_marker), render_end) >= 0:
+        raise ValueError("Parche HTML de fines de semana: se encontró más de un renderWeekends")
+    return source[:render_start] + WEEKEND_RENDER + "\n\n\n" + source[render_end:]
