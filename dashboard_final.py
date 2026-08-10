@@ -8,6 +8,7 @@ from contract_shift_dashboard import apply_contract_shift_support
 from dashboard_extensions import apply_extensions
 from multi_file_dashboard import apply_multi_file_support
 from review_iteration_dashboard import apply_review_iteration_support
+from weekend_assignment_dashboard import apply_weekend_assignment_support
 
 runner = Path("dashboard_patch_v3.py").read_text(encoding="utf-8")
 runner = re.sub(r'\nexec\(compile\(source, "app.py", "exec"\), \{.*$', '', runner, flags=re.S)
@@ -17,5 +18,6 @@ source = apply_extensions(namespace["source"])
 source = apply_multi_file_support(source)
 source = apply_contract_shift_support(source)
 source = apply_review_iteration_support(source)
+source = apply_weekend_assignment_support(source)
 source = apply_contract_hours_heatmap_support(source)
 exec(compile(source, "app.py", "exec"), {"__name__": "__main__", "__file__": "app.py"})
