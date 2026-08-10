@@ -5,6 +5,7 @@ on:
     paths:
       - 'html_assets/reference_payload_*.js'
       - 'scripts/build_distributable_html.py'
+      - 'scripts/diagnose_weekend_html.py'
       - '.github/workflows/build-distributable-html.yml'
   workflow_dispatch:
 
@@ -25,14 +26,17 @@ jobs:
       - name: Generate single-file HTML
         run: python scripts/build_distributable_html.py
 
+      - name: Diagnose weekend source
+        run: python scripts/diagnose_weekend_html.py
+
       - name: Commit regenerated distributable
         run: |
-          if git diff --quiet -- validador_distribuible.html; then
-            echo 'validador_distribuible.html is already up to date.'
+          if git diff --quiet -- validador_distribuible.html standalone/weekend_source_diagnostic.txt; then
+            echo 'Generated files are already up to date.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add validador_distribuible.html
+          git add validador_distribuible.html standalone/weekend_source_diagnostic.txt
           git commit -m 'Regenerar HTML distribuible'
           git push origin HEAD:${{ github.ref_name }}
