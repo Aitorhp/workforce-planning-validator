@@ -15,6 +15,8 @@ import hashlib
 import re
 from pathlib import Path
 
+from weekend_html_patch import patch_weekend_assignment
+
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "html_assets"
 OUTPUT = ROOT / "validador_distribuible.html"
@@ -257,6 +259,7 @@ def patch_collapsible_sidebar(source: str) -> str:
 def patched_payload(payload: str) -> tuple[str, bytes]:
     compressed = base64.b64decode(payload, validate=True)
     source = gzip.decompress(compressed).decode("utf-8")
+    source = patch_weekend_assignment(source)
     source = patch_contract_hours_heatmap(source)
     source = patch_collapsible_sidebar(source)
     source_bytes = source.encode("utf-8")
