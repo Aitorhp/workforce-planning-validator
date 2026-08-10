@@ -1,16 +1,102 @@
-MARKER 't("Resumen del periodo")'
-function renderWeekends(F){
-  let h=`<div class="subhead">${t("Fines de semana y rotación de descansos")}
-</div>`+help(t("Un fin de semana libre exige no trabajar ni el sábado ni el domingo. Sábados y domingos libres también se cuentan por separado, por empleado y mes."));
+MARKER 'wkendReqFull' 1/14
+nction downloadTableXlsx(id){
+  const item=TABLE_EXPORTS.get(id);
+ if(!item) return;
 
-  const {monthly,detail}
-=prepWeekend(F);
+  const bytes=buildXlsx([{name:t("Tabla"),rows:[item.cols,...item.rows]}
+]);
 
-  if(!monthly.length) return h+callout("warning",t("No hay información suficiente para calcular fines de semana."));
+  const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+);
 
-  const availHours=monthly.map(m=>m.app).filter(v=>v!=null&&isFinite(v));
+  const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=`tabla_${S.tab+1}
+.xlsx`;
+ a.click();
 
-  const obsMax=availHours.length?Math.max(...availHours):40;
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+
+}
+
+
+/* ============================= App state ============================== */
+const S = {
+  raw:null, rawFiles:[], fileInfo:[], filenames:[], combinedPeriod:null,
+  detection:null, sources:null, available:[], source:null,
+  cache:{}
+, result:null, filename:"", weekStarts:[], weekIdx:-1,
+  tab:0, frames:null,
+  f:{ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+,
+}
+;
+
+const TAB_KEYS=["Resumen","Restricciones","Horas contractuales","Cobertura diaria","Balance mañana/tarde","Ausencias","Fines de semana","Metodología"];
+
+function tabNames(){ return TAB_KEYS.map(k=>t(k));
+ }
+
+
+const D = WFV;
+ // motor
+function di(iso){ return D.parseDay(iso);
+ }
+        // ISO -> day int
+function dmy(dayInt){ return D.fmtDMY(dayInt);
+ }
+
+function ddmm(dayInt){ const {d,m}
+=D.dayYMD(dayInt);
+ return `${String(d).padStart(2,"0")}
+/${String(m).padStart(2,"0")}
+`;
+ }
+
+
+
+/* ---------- Carga y combinación de uno o dos meses ---------- */
+function parsePlanningText(text, filename){
+  let data;
+
+  try{ data=JSON.parse(String(text).replace(/^﻿/,""));
+ }
+
+  catch(e){ throw new Error(t("JSON no valido: {e}
+",{e:`${filename}
+: ${e.message}
+`}
+));
+ }
+
+  if(!data || typeof data!=="object" || Array.isArray(data)) throw new Error(t("La raiz del JSON debe ser un objeto."));
+
+  return data;
+
+}
+
+function planningDocumentInfo(data, filename){
+  const storeId=(data.store||{}
+).id;
+
+  if(storeId===null || storeId===undefined || storeId==="") throw new Error(`${filename}
+: ${t("El fichero no identifica la tienda.")}
+`);
+
+  if(!Array.isArray(data.storeDayTimes)) throw new Error(`${filename}
+: ${t("El campo storeDayTimes debe ser una lista.")}
+`);
+
+  const dates=[];
+ const seen=new Set();
+
+  for(const item of data.storeDayTimes){
+    if(!item || typeof item!=="object" || !item.operatingDate) continue
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 2/14
+ax(...availHours):40;
  const limit=Math.max(80,obsMax);
 
   if(S.f.wkendMin==null) S.f.wkendMin=Math.min(30,limit);
@@ -67,7 +153,2243 @@ function renderWeekends(F){
 
   employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
 
+  const failWk=e=>e.fs<S.
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 3/14
+0,obsMax);
+
+  if(S.f.wkendMin==null) S.f.wkendMin=Math.min(30,limit);
+
+  if(S.f.wkendMax==null) S.f.wkendMax=limit;
+
+  h+=`<div class="controls">
+    <div class="ctrl"><label>${t("Horas contractuales mínimas")}
+</label><input type="number" id="wkendMin" min="0" max="${limit}
+" step="1" value="${S.f.wkendMin}
+"></div>
+    <div class="ctrl"><label>${t("Horas contractuales máximas")}
+</label><input type="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendRe
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 4/14
+e="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
   const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 5/14
+.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
+,
+    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqFull}
+`,tone:nWk.length?"red":"green"}
+,
+    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSat}
+`,tone:nSat.length?"red":"green"}
+,
+    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSun}
+`,tone:nSun.length?"red":"green"}
+,
+  ],5);
+
+  if(wends.length){
+    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
+</h3>`;
+
+    const gw=groupBy(wends,d=>d.ini);
+ const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
+)).sort((a,b)=>a.ini-b.ini);
+
+    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
+))}
+,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
+))}
+,{name:t("D
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 6/14
+um(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
+,
+    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqFull}
+`,tone:nWk.length?"red":"green"}
+,
+    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSat}
+`,tone:nSat.length?"red":"green"}
+,
+    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSun}
+`,tone:nSun.length?"red":"green"}
+,
+  ],5);
+
+  if(wends.length){
+    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
+</h3>`;
+
+    const gw=groupBy(wends,d=>d.ini);
+ const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
+)).sort((a,b)=>a.ini-b.ini);
+
+    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
+))}
+,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
+))}
+,{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}
+))}
+],rot.map(r=>r.label),{h:390,dec:0}
+)+`</div>`;
+
+    // Mapa HTML con cabecera y columnas fijas, búsqueda y alertas.
+    h+=`<div class="block"><h3>${t("Mapa empleado-fin de semana")}
+</h3>`+help(t("El mapa mantiene fijas las columnas de empleado y contrato. Las filas con cero fines de semana completos se consideran alertas."));
+
+    const order=[...groupBy(wends,d=>d.ini).entries()].sort((a,b)=>Number(a[0])-Number(b[0])).map(([,rs])=>rs[0].fin);
+
+    const pv=new Map();
+ wends.forEach(d=>pv.set((d.id_tienda+"|"+d.personId)+"|"+d.fin,(d.sat?1:0)+(d.sun?1:0)));
+
+    const mapRows=employees.map(e=>
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 7/14
+];
+
+  if(!cur.length) h+=callout("info",t("No hay empleados en esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("S
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 8/14
+a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("Solo se utilizan segmentos con")}
+ <code>hourType = WORK</code>.</li>
+    <li>${t("La duracion diaria es la suma neta de los segmentos 
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 9/14
+:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("Solo se utilizan segmentos con")}
+ <code>hourType = WORK</code>.</li>
+    <li>${t("La duracion diaria es la suma neta de los segmentos seleccionados.")}
+</li>
+    <li>${t("Se ap
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 10/14
+Type = WORK</code>.</li>
+    <li>${t("La duracion diaria es la suma neta de los segmentos seleccionados.")}
+</li>
+    <li>${t("Se aplican las mismas reglas: maximo 5 dias consecutivos, entre 4 y 7,5 horas por turno y al menos 11 horas entre jornadas.")}
+</li>
+    <li>${t("El control semanal compara las horas del origen seleccionado con")}
+ <code>applicableWorkingHours</code>.</li>
+    <li>${t("Cambios de horas contractuales entre meses consecutivos")}
+: <code>applicableWorkingHours</code> se compara por empleado y mes.</li>
+    <li>${t("Configuración de franjas")}
+: ${t("Regla activa: mañana < {m}
+;
+ central entre {m}
+ y {a}
+, incluidos ambos límites;
+ tarde > {a}
+.",{m:S.f.morningCutoff,a:S.f.afternoonCutoff}
+)}
+</li>
+    <li>${t("Las semanas completamente vacías de planificación se excluyen de cobertura, ausencias, balance y fines de semana.")}
+</li>
+    <li>${t("Reglas de fin de semana")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</li>
+    <li>${t("Las ausencias no se suman a la planificacion;
+ solo se usan como posible explicacion del deficit.")}
+</li>
+    <li>${t("Cambiar el selector vuelve a ejecutar todo el analisis sin mezclar fuentes.")}
+</li>
+    <li>${S.filenames.length>1?t("Se han combinado {n}
+ ficheros de la misma tienda para analizar el periodo completo.",{n:S.filenames.length}
+):t("Un fichero de la tienda se analiza como periodo independiente.")}
+</li>
+  </ul>
+  <p class="chart-note">${t("Réplica HTML autónoma del validador Streamlit. Cálculos verificados contra el motor Python original (paridad byte a byte en turnos, incidencias, horas semanales, balance y ausencias).")}
+</p>
+  </div>`;
+
+}
+
+
+/* ============================= Render orchestration =================== */
+const RENDERERS=[renderResumen,renderRestricciones,renderHoras,renderCobertura,renderBalance,renderAusencias,renderWeekends,renderMetodologia];
+
+function renderTab(){
+  TABLE_EXPORTS.clear();
+ TABLE_SEQ=0;
+
+  const F=S.frames;
+ const panel=document.getElementById("panel");
+
+  panel.innerHTML = S.tab===7? renderMetodologia() : RENDERERS[S.tab](F);
+
+  wireTabControls();
+
+}
+
+function filterWeekendMapRows(){
+  const tableEl=document.getElementById("weekendMapTable");
+ if(!tableEl) return;
+
+  const q=String(S.f.wkendMapQuery||"").trim().toLowerCase();
+
+  tableEl.querySelectorAll("tbody tr").forEach(row=>{
+    const matches
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 11/14
+;
+ if(el) el.addEventListener(ev,fn);
+ }
+;
+
+  on("wkDev","change",e=>{S.f.wkDev=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkStatusChips .chip").forEach(c=>c.addEventListener("click",()=>{ const s=c.dataset.s;
+ const i=S.f.wkStatus.indexOf(s);
+ if(i>=0)S.f.wkStatus.splice(i,1);
+ else S.f.wkStatus.push(s);
+ renderTab();
+ }
+));
+
+  on("wkWeek","change",e=>{S.f.wkWeek=e.target.value;
+renderTab();
+}
+);
+
+  on("wkEmp","input",e=>{S.f.wkEmp=e.target.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load =
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 12/14
+,fn);
+ }
+;
+
+  on("wkDev","change",e=>{S.f.wkDev=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkStatusChips .chip").forEach(c=>c.addEventListener("click",()=>{ const s=c.dataset.s;
+ const i=S.f.wkStatus.indexOf(s);
+ if(i>=0)S.f.wkStatus.splice(i,1);
+ else S.f.wkStatus.push(s);
+ renderTab();
+ }
+));
+
+  on("wkWeek","change",e=>{S.f.wkWeek=e.target.value;
+renderTab();
+}
+);
+
+  on("wkEmp","input",e=>{S.f.wkEmp=e.target.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+fun
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 13/14
+)=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+;
+
+  if(!S.cache[src]) S.cache[src]=D.runValidation(S.raw,src);
+
+  S.result=S.cache[src];
+
+  S.weekStarts=computeWeekStarts(S.result);
+
+  S.frames=buildFrames();
+
+  renderSidebarDynamic();
+
+  renderHeader();
+
+  renderContent();
+
+}
+
+function setWeek(idx){ S.weekIdx=idx;
+ S.frames=buildFrames();
+
+  S.f.wkendMin=null;
+ S.f.wkendMax=null;
+ S.f.wkStatus=null;
+
+  renderHeader();
+ renderContent();
+ }
+
+
+function renderHeader(){
+  const src=S.source, sd=S.sources[src];
+
+  document.getElementById("introMsg").style.display="none";
+
+  const store=S.result.store_id!=null?S.result.store_id:t("Sin identificar");
+
+  const now=new Date();
+ const stamp=`${String(now.getDate()).padStart(2,"0")}
+/${String(now.getMonth()+1).padStart(2,"0")}
+/${now.getFullYear()}
+ ${String(now.getHours()).padStart(2,"0")}
+:${String(now.getMinutes()).padStart(2,"0")}
+`;
+
+  let wf = S.weekIdx<0? t("Filtro semanal: periodo completo") : t("Filtro activo: {a}
+ - {b}
+",{a:dmy(S.weekStarts[S.weekIdx]),b:dmy(S.weekStarts[S.weekIdx]+6)}
+);
+
+  const fileMessage=S.filenames.length>1?t("Se han combinado {n}
+ ficheros de la misma tienda para analizar el periodo completo.",{n:S.filenames.length}
+):t("Un fichero de la tienda se analiza como periodo independiente.");
+
+  const period=S.combinedPeriod?`${dmy(S.combinedPeriod.start)}
+ - ${dmy(S.combinedPeriod.end)}
+`:"—";
+
+  const html=`<div class="source-box"><b>${t("Origen analizado:")}
+</b> ${esc(t(D.S
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqFull' 14/14
+("weekSel").addEventListener("change",e=>setWeek(Number(e.target.value)));
+
+  document.getElementById("dlBtn").addEventListener("click",downloadExcel);
+
+}
+
+function ensureHeaderBox(){ if(!document.getElementById("headerBox")){ const d=document.createElement("div");
+ d.id="headerBox";
+ const c=document.getElementById("content");
+ c.parentNode.insertBefore(d,c);
+ }
+ }
+
+
+function downloadExcel(){
+  const r=S.frames;
+ const src=S.source;
+
+  const sheets=[];
+
+  sheets.push({name:t("Informacion"),rows:[[t("Origen analizado"),src],[t("Descripcion"),t(D.SCHEDULE_SOURCES[src])],[t("Ficheros"),S.filenames.join(" | ")],[t("Periodo combinado"),S.combinedPeriod?D.dayISO(S.combinedPeriod.start)+" - "+D.dayISO(S.combinedPeriod.end):""],[t("Los turnos de mañana empiezan antes de"),S.f.morningCutoff],[t("Los turnos de tarde empiezan después de"),S.f.afternoonCutoff],[t("Mínimo fines de semana completos libres"),S.f.wkendReqFull],[t("Mínimo sábados libres"),S.f.wkendReqSat],[t("Mínimo domingos libres"),S.f.wkendReqSun]]}
+);
+
+  const sh=r.shifts.map(s=>[s.id_tienda,s.personId,s.applicableWorkingHours,s.day,s.hora_inicio,s.hora_fin,s.horas_totales,s.duracion_descanso,configurableShiftPeriod(s.hora_inicio,S.f.morningCutoff,S.f.afternoonCutoff)]);
+
+  sheets.push({name:t("Turnos"),rows:[["id_tienda","personId","applicableWorkingHours","day","hora_inicio","hora_fin","horas_totales","duracion_descanso","franja_turno"],...sh]}
+);
+
+  const sm=r.summaries;
+ const smc=sm.length?Object.keys(sm[0]):[t("Sin registros")];
+
+  sheets.push({name:t("Validacion mensual"),rows:[smc,...sm.map(o=>smc.map(k=>o[k]))]}
+);
+
+  const cc=contractChanges(sm);
+
+  sheets.push({name:t("Cambios contractuales"),rows:[["id_tienda","personId","Mes anterior","Horas mes anterior","Mes siguiente","Horas mes siguiente","Diferencia","Estado"],...cc.map(o=>[o.id_tienda,o.personId,o["Mes anterior"],o["Horas mes anterior"],o["Mes siguiente"],o["Horas mes siguiente"],o["Diferencia"],o.Estado])]}
+);
+
+  const inc=r.incidents.map(i=>[i.id_tienda,i.personId,i.mes,i.tipo_incidencia,i.fecha_inicio,i.fecha_fin,i.valor_observado,i.limite,i.detalle]);
+
+  sheets.push({name:t("Detalle incidencias"),rows:[["id_tienda","personId","mes","tipo_incidencia","fecha_inicio","fecha_fin","valor_observado","limite","detalle"],...inc]}
+);
+
+  const wk=r.weekly;
+ const wkc=wk.length?Object.keys(wk[0]):[t("Sin registros")];
+
+  sheets.push({name:t("Control horas semanal"),rows
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 1/14
+ableXlsx(id){
+  const item=TABLE_EXPORTS.get(id);
+ if(!item) return;
+
+  const bytes=buildXlsx([{name:t("Tabla"),rows:[item.cols,...item.rows]}
+]);
+
+  const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+);
+
+  const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=`tabla_${S.tab+1}
+.xlsx`;
+ a.click();
+
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+
+}
+
+
+/* ============================= App state ============================== */
+const S = {
+  raw:null, rawFiles:[], fileInfo:[], filenames:[], combinedPeriod:null,
+  detection:null, sources:null, available:[], source:null,
+  cache:{}
+, result:null, filename:"", weekStarts:[], weekIdx:-1,
+  tab:0, frames:null,
+  f:{ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+,
+}
+;
+
+const TAB_KEYS=["Resumen","Restricciones","Horas contractuales","Cobertura diaria","Balance mañana/tarde","Ausencias","Fines de semana","Metodología"];
+
+function tabNames(){ return TAB_KEYS.map(k=>t(k));
+ }
+
+
+const D = WFV;
+ // motor
+function di(iso){ return D.parseDay(iso);
+ }
+        // ISO -> day int
+function dmy(dayInt){ return D.fmtDMY(dayInt);
+ }
+
+function ddmm(dayInt){ const {d,m}
+=D.dayYMD(dayInt);
+ return `${String(d).padStart(2,"0")}
+/${String(m).padStart(2,"0")}
+`;
+ }
+
+
+
+/* ---------- Carga y combinación de uno o dos meses ---------- */
+function parsePlanningText(text, filename){
+  let data;
+
+  try{ data=JSON.parse(String(text).replace(/^﻿/,""));
+ }
+
+  catch(e){ throw new Error(t("JSON no valido: {e}
+",{e:`${filename}
+: ${e.message}
+`}
+));
+ }
+
+  if(!data || typeof data!=="object" || Array.isArray(data)) throw new Error(t("La raiz del JSON debe ser un objeto."));
+
+  return data;
+
+}
+
+function planningDocumentInfo(data, filename){
+  const storeId=(data.store||{}
+).id;
+
+  if(storeId===null || storeId===undefined || storeId==="") throw new Error(`${filename}
+: ${t("El fichero no identifica la tienda.")}
+`);
+
+  if(!Array.isArray(data.storeDayTimes)) throw new Error(`${filename}
+: ${t("El campo storeDayTimes debe ser una lista.")}
+`);
+
+  const dates=[];
+ const seen=new Set();
+
+  for(const item of data.storeDayTimes){
+    if(!item || typeof item!=="object" || !item.operatingDate) continue;
+
+    const day=
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 2/14
+
+  h+=`<div class="controls">
+    <div class="ctrl"><label>${t("Horas contractuales mínimas")}
+</label><input type="number" id="wkendMin" min="0" max="${limit}
+" step="1" value="${S.f.wkendMin}
+"></div>
+    <div class="ctrl"><label>${t("Horas contractuales máximas")}
+</label><input type="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSu
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 3/14
+s="ctrl"><label>${t("Horas contractuales mínimas")}
+</label><input type="number" id="wkendMin" min="0" max="${limit}
+" step="1" value="${S.f.wkendMin}
+"></div>
+    <div class="ctrl"><label>${t("Horas contractuales máximas")}
+</label><input type="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 4/14
+ step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),det
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 5/14
+ing",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
+,
+    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqFull}
+`,tone:nWk.length?"red":"green"}
+,
+    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSat}
+`,tone:nSat.length?"red":"green"}
+,
+    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSun}
+`,tone:nSun.length?"red":"green"}
+,
+  ],5);
+
+  if(wends.length){
+    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
+</h3>`;
+
+    const gw=groupBy(wends,d=>d.ini);
+ const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
+)).sort((a,b)=>a.ini-b.ini);
+
+    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
+))}
+,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
+))}
+,{name:t("Domingo libre"),color:"#f59e0b",poin
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 6/14
+nity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
+,
+    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqFull}
+`,tone:nWk.length?"red":"green"}
+,
+    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSat}
+`,tone:nSat.length?"red":"green"}
+,
+    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSun}
+`,tone:nSun.length?"red":"green"}
+,
+  ],5);
+
+  if(wends.length){
+    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
+</h3>`;
+
+    const gw=groupBy(wends,d=>d.ini);
+ const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
+)).sort((a,b)=>a.ini-b.ini);
+
+    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
+))}
+,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
+))}
+,{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}
+))}
+],rot.map(r=>r.label),{h:390,dec:0}
+)+`</div>`;
+
+    // Mapa HTML con cabecera y columnas fijas, búsqueda y alertas.
+    h+=`<div class="block"><h3>${t("Mapa empleado-fin de semana")}
+</h3>`+help(t("El mapa mantiene fijas las columnas de empleado y contrato. Las filas con cero fines de semana completos se consideran alertas."));
+
+    const order=[...groupBy(wends,d=>d.ini).entries()].sort((a,b)=>Number(a[0])-Number(b[0])).map(([,rs])=>rs[0].fin);
+
+    const pv=new Map();
+ wends.forEach(d=>pv.set((d.id_tienda+"|"+d.personId)+"|"+d.fin,(d.sat?1:0)+(d.sun?1:0)));
+
+    const mapRows=employees.map(e=>{
+      const key=e.id_tienda+"|"+e.personId;
+
+      const values=order.map(w=>pv.has(key+"|"+w)?pv.get(key+"|"+w):null);
+
+      const f
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 7/14
+("info",t("No hay empleados en esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("Solo se utilizan segmentos con")
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 8/14
+,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("Solo se utilizan segmentos con")}
+ <code>hourType = WORK</code>.</li>
+    <li>${t("La duracion diaria es la suma neta de los segmentos seleccionados.")}
+</li>
+    <li>${t("Se aplican las mismas reglas: maximo 
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 9/14
+ompletos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("Solo se utilizan segmentos con")}
+ <code>hourType = WORK</code>.</li>
+    <li>${t("La duracion diaria es la suma neta de los segmentos seleccionados.")}
+</li>
+    <li>${t("Se aplican las mismas reglas: maximo 5 dias consecutivos, entre 4 y 7
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 10/14
+on diaria es la suma neta de los segmentos seleccionados.")}
+</li>
+    <li>${t("Se aplican las mismas reglas: maximo 5 dias consecutivos, entre 4 y 7,5 horas por turno y al menos 11 horas entre jornadas.")}
+</li>
+    <li>${t("El control semanal compara las horas del origen seleccionado con")}
+ <code>applicableWorkingHours</code>.</li>
+    <li>${t("Cambios de horas contractuales entre meses consecutivos")}
+: <code>applicableWorkingHours</code> se compara por empleado y mes.</li>
+    <li>${t("Configuración de franjas")}
+: ${t("Regla activa: mañana < {m}
+;
+ central entre {m}
+ y {a}
+, incluidos ambos límites;
+ tarde > {a}
+.",{m:S.f.morningCutoff,a:S.f.afternoonCutoff}
+)}
+</li>
+    <li>${t("Las semanas completamente vacías de planificación se excluyen de cobertura, ausencias, balance y fines de semana.")}
+</li>
+    <li>${t("Reglas de fin de semana")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</li>
+    <li>${t("Las ausencias no se suman a la planificacion;
+ solo se usan como posible explicacion del deficit.")}
+</li>
+    <li>${t("Cambiar el selector vuelve a ejecutar todo el analisis sin mezclar fuentes.")}
+</li>
+    <li>${S.filenames.length>1?t("Se han combinado {n}
+ ficheros de la misma tienda para analizar el periodo completo.",{n:S.filenames.length}
+):t("Un fichero de la tienda se analiza como periodo independiente.")}
+</li>
+  </ul>
+  <p class="chart-note">${t("Réplica HTML autónoma del validador Streamlit. Cálculos verificados contra el motor Python original (paridad byte a byte en turnos, incidencias, horas semanales, balance y ausencias).")}
+</p>
+  </div>`;
+
+}
+
+
+/* ============================= Render orchestration =================== */
+const RENDERERS=[renderResumen,renderRestricciones,renderHoras,renderCobertura,renderBalance,renderAusencias,renderWeekends,renderMetodologia];
+
+function renderTab(){
+  TABLE_EXPORTS.clear();
+ TABLE_SEQ=0;
+
+  const F=S.frames;
+ const panel=document.getElementById("panel");
+
+  panel.innerHTML = S.tab===7? renderMetodologia() : RENDERERS[S.tab](F);
+
+  wireTabControls();
+
+}
+
+function filterWeekendMapRows(){
+  const tableEl=document.getElementById("weekendMapTable");
+ if(!tableEl) return;
+
+  const q=String(S.f.wkendMapQuery||"").trim().toLowerCase();
+
+  tableEl.querySelectorAll("tbody tr").forEach(row=>{
+    const matchesText=!q || String(row.dataset.search||"").inclu
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 11/14
+ent.querySelectorAll("#wkStatusChips .chip").forEach(c=>c.addEventListener("click",()=>{ const s=c.dataset.s;
+ const i=S.f.wkStatus.indexOf(s);
+ if(i>=0)S.f.wkStatus.splice(i,1);
+ else S.f.wkStatus.push(s);
+ renderTab();
+ }
+));
+
+  on("wkWeek","change",e=>{S.f.wkWeek=e.target.value;
+renderTab();
+}
+);
+
+  on("wkEmp","input",e=>{S.f.wkEmp=e.target.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, w
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 12/14
+sChips .chip").forEach(c=>c.addEventListener("click",()=>{ const s=c.dataset.s;
+ const i=S.f.wkStatus.indexOf(s);
+ if(i>=0)S.f.wkStatus.splice(i,1);
+ else S.f.wkStatus.push(s);
+ renderTab();
+ }
+));
+
+  on("wkWeek","change",e=>{S.f.wkWeek=e.target.value;
+renderTab();
+}
+);
+
+  on("wkEmp","input",e=>{S.f.wkEmp=e.target.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", 
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 13/14
+Xlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+;
+
+  if(!S.cache[src]) S.cache[src]=D.runValidation(S.raw,src);
+
+  S.result=S.cache[src];
+
+  S.weekStarts=computeWeekStarts(S.result);
+
+  S.frames=buildFrames();
+
+  renderSidebarDynamic();
+
+  renderHeader();
+
+  renderContent();
+
+}
+
+function setWeek(idx){ S.weekIdx=idx;
+ S.frames=buildFrames();
+
+  S.f.wkendMin=null;
+ S.f.wkendMax=null;
+ S.f.wkStatus=null;
+
+  renderHeader();
+ renderContent();
+ }
+
+
+function renderHeader(){
+  const src=S.source, sd=S.sources[src];
+
+  document.getElementById("introMsg").style.display="none";
+
+  const store=S.result.store_id!=null?S.result.store_id:t("Sin identificar");
+
+  const now=new Date();
+ const stamp=`${String(now.getDate()).padStart(2,"0")}
+/${String(now.getMonth()+1).padStart(2,"0")}
+/${now.getFullYear()}
+ ${String(now.getHours()).padStart(2,"0")}
+:${String(now.getMinutes()).padStart(2,"0")}
+`;
+
+  let wf = S.weekIdx<0? t("Filtro semanal: periodo completo") : t("Filtro activo: {a}
+ - {b}
+",{a:dmy(S.weekStarts[S.weekIdx]),b:dmy(S.weekStarts[S.weekIdx]+6)}
+);
+
+  const fileMessage=S.filenames.length>1?t("Se han combinado {n}
+ ficheros de la misma tienda para analizar el periodo completo.",{n:S.filenames.length}
+):t("Un fichero de la tienda se analiza como periodo independiente.");
+
+  const period=S.combinedPeriod?`${dmy(S.combinedPeriod.start)}
+ - ${dmy(S.combinedPeriod.end)}
+`:"—";
+
+  const html=`<div class="source-box"><b>${t("Origen analizado:")}
+</b> ${esc(t(D.SCHEDULE_SOURCES[
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSat' 14/14
+ek(Number(e.target.value)));
+
+  document.getElementById("dlBtn").addEventListener("click",downloadExcel);
+
+}
+
+function ensureHeaderBox(){ if(!document.getElementById("headerBox")){ const d=document.createElement("div");
+ d.id="headerBox";
+ const c=document.getElementById("content");
+ c.parentNode.insertBefore(d,c);
+ }
+ }
+
+
+function downloadExcel(){
+  const r=S.frames;
+ const src=S.source;
+
+  const sheets=[];
+
+  sheets.push({name:t("Informacion"),rows:[[t("Origen analizado"),src],[t("Descripcion"),t(D.SCHEDULE_SOURCES[src])],[t("Ficheros"),S.filenames.join(" | ")],[t("Periodo combinado"),S.combinedPeriod?D.dayISO(S.combinedPeriod.start)+" - "+D.dayISO(S.combinedPeriod.end):""],[t("Los turnos de mañana empiezan antes de"),S.f.morningCutoff],[t("Los turnos de tarde empiezan después de"),S.f.afternoonCutoff],[t("Mínimo fines de semana completos libres"),S.f.wkendReqFull],[t("Mínimo sábados libres"),S.f.wkendReqSat],[t("Mínimo domingos libres"),S.f.wkendReqSun]]}
+);
+
+  const sh=r.shifts.map(s=>[s.id_tienda,s.personId,s.applicableWorkingHours,s.day,s.hora_inicio,s.hora_fin,s.horas_totales,s.duracion_descanso,configurableShiftPeriod(s.hora_inicio,S.f.morningCutoff,S.f.afternoonCutoff)]);
+
+  sheets.push({name:t("Turnos"),rows:[["id_tienda","personId","applicableWorkingHours","day","hora_inicio","hora_fin","horas_totales","duracion_descanso","franja_turno"],...sh]}
+);
+
+  const sm=r.summaries;
+ const smc=sm.length?Object.keys(sm[0]):[t("Sin registros")];
+
+  sheets.push({name:t("Validacion mensual"),rows:[smc,...sm.map(o=>smc.map(k=>o[k]))]}
+);
+
+  const cc=contractChanges(sm);
+
+  sheets.push({name:t("Cambios contractuales"),rows:[["id_tienda","personId","Mes anterior","Horas mes anterior","Mes siguiente","Horas mes siguiente","Diferencia","Estado"],...cc.map(o=>[o.id_tienda,o.personId,o["Mes anterior"],o["Horas mes anterior"],o["Mes siguiente"],o["Horas mes siguiente"],o["Diferencia"],o.Estado])]}
+);
+
+  const inc=r.incidents.map(i=>[i.id_tienda,i.personId,i.mes,i.tipo_incidencia,i.fecha_inicio,i.fecha_fin,i.valor_observado,i.limite,i.detalle]);
+
+  sheets.push({name:t("Detalle incidencias"),rows:[["id_tienda","personId","mes","tipo_incidencia","fecha_inicio","fecha_fin","valor_observado","limite","detalle"],...inc]}
+);
+
+  const wk=r.weekly;
+ const wkc=wk.length?Object.keys(wk[0]):[t("Sin registros")];
+
+  sheets.push({name:t("Control horas semanal"),rows:[wkc,...wk.map(o=>wkc.map(k=>o[k]))]}
+);
+
+  con
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 1/14
+ const item=TABLE_EXPORTS.get(id);
+ if(!item) return;
+
+  const bytes=buildXlsx([{name:t("Tabla"),rows:[item.cols,...item.rows]}
+]);
+
+  const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+);
+
+  const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=`tabla_${S.tab+1}
+.xlsx`;
+ a.click();
+
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+
+}
+
+
+/* ============================= App state ============================== */
+const S = {
+  raw:null, rawFiles:[], fileInfo:[], filenames:[], combinedPeriod:null,
+  detection:null, sources:null, available:[], source:null,
+  cache:{}
+, result:null, filename:"", weekStarts:[], weekIdx:-1,
+  tab:0, frames:null,
+  f:{ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+,
+}
+;
+
+const TAB_KEYS=["Resumen","Restricciones","Horas contractuales","Cobertura diaria","Balance mañana/tarde","Ausencias","Fines de semana","Metodología"];
+
+function tabNames(){ return TAB_KEYS.map(k=>t(k));
+ }
+
+
+const D = WFV;
+ // motor
+function di(iso){ return D.parseDay(iso);
+ }
+        // ISO -> day int
+function dmy(dayInt){ return D.fmtDMY(dayInt);
+ }
+
+function ddmm(dayInt){ const {d,m}
+=D.dayYMD(dayInt);
+ return `${String(d).padStart(2,"0")}
+/${String(m).padStart(2,"0")}
+`;
+ }
+
+
+
+/* ---------- Carga y combinación de uno o dos meses ---------- */
+function parsePlanningText(text, filename){
+  let data;
+
+  try{ data=JSON.parse(String(text).replace(/^﻿/,""));
+ }
+
+  catch(e){ throw new Error(t("JSON no valido: {e}
+",{e:`${filename}
+: ${e.message}
+`}
+));
+ }
+
+  if(!data || typeof data!=="object" || Array.isArray(data)) throw new Error(t("La raiz del JSON debe ser un objeto."));
+
+  return data;
+
+}
+
+function planningDocumentInfo(data, filename){
+  const storeId=(data.store||{}
+).id;
+
+  if(storeId===null || storeId===undefined || storeId==="") throw new Error(`${filename}
+: ${t("El fichero no identifica la tienda.")}
+`);
+
+  if(!Array.isArray(data.storeDayTimes)) throw new Error(`${filename}
+: ${t("El campo storeDayTimes debe ser una lista.")}
+`);
+
+  const dates=[];
+ const seen=new Set();
+
+  for(const item of data.storeDayTimes){
+    if(!item || typeof item!=="object" || !item.operatingDate) continue;
+
+    const day=D.parseDay(item
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 2/14
+t}
+" step="1" value="${S.f.wkendMin}
+"></div>
+    <div class="ctrl"><label>${t("Horas contractuales máximas")}
+</label><input type="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(empl
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 3/14
+
+    <div class="ctrl"><label>${t("Horas contractuales máximas")}
+</label><input type="number" id="wkendMax" min="0" max="${limit}
+" step="1" value="${S.f.wkendMax}
+"></div>
+  </div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ 
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 4/14
+div>`;
+
+  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
+</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
+<div class="controls" style="grid-template-columns:repeat(3,1fr)">
+    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
+</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo sábados libres")}
+</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
+"></div>
+    <div class="ctrl"><label>${t("Mínimo domingos libres")}
+</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
+"></div>
+  </div><div class="chart-note">${t("Regla activa")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</div></div>`;
+
+  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 5/14
+n ser superiores a las horas máximas."));
+
+  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
+
+  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
+
+  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
+
+  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
+
+  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
+
+  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
+    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
+));
+
+  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
+
+  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
+
+  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
+
+  h+=kpiGrid([
+    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
+ y {b}
+ h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
+),tone:"blue"}
+,
+    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
+,
+    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqFull}
+`,tone:nWk.length?"red":"green"}
+,
+    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSat}
+`,tone:nSat.length?"red":"green"}
+,
+    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
+: ${S.f.wkendReqSun}
+`,tone:nSun.length?"red":"green"}
+,
+  ],5);
+
+  if(wends.length){
+    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
+</h3>`;
+
+    const gw=groupBy(wends,d=>d.ini);
+ const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
+)).sort((a,b)=>a.ini-b.ini);
+
+    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
+))}
+,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
+))}
+,{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}
+))}
+],rot.m
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 6/14
+sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
 
   const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
 
@@ -128,29 +2450,1325 @@ function renderWeekends(F){
 
       const freeDays=sum(values.filter(v=>v!=null));
 
-      return {...e,key,values,full,freeDays,alert:failWk(e)||failSat(e)||failSun(e)}
+      return {...e,key,values,full,freeDays,al
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 7/14
+ esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("Solo se utilizan segmentos con")}
+ <code>hourType = WORK</code>
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 8/14
+libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("Solo se utilizan segmentos con")}
+ <code>hourType = WORK</code>.</li>
+    <li>${t("La duracion diaria es la suma neta de los segmentos seleccionados.")}
+</li>
+    <li>${t("Se aplican las mismas reglas: maximo 5 dias consecutivos, entre 4 y 7,5 horas por turno y al menos 1
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 9/14
+.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTimes.${esc(src)}
+</code>.</p>
+  <ul>
+    <li>${t("Solo se utilizan segmentos con")}
+ <code>hourType = WORK</code>.</li>
+    <li>${t("La duracion diaria es la suma neta de los segmentos seleccionados.")}
+</li>
+    <li>${t("Se aplican las mismas reglas: maximo 5 dias consecutivos, entre 4 y 7,5 horas por turno y al menos 11 horas entre jornadas.")}
+</li>
+ 
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 10/14
+leccionados.")}
+</li>
+    <li>${t("Se aplican las mismas reglas: maximo 5 dias consecutivos, entre 4 y 7,5 horas por turno y al menos 11 horas entre jornadas.")}
+</li>
+    <li>${t("El control semanal compara las horas del origen seleccionado con")}
+ <code>applicableWorkingHours</code>.</li>
+    <li>${t("Cambios de horas contractuales entre meses consecutivos")}
+: <code>applicableWorkingHours</code> se compara por empleado y mes.</li>
+    <li>${t("Configuración de franjas")}
+: ${t("Regla activa: mañana < {m}
+;
+ central entre {m}
+ y {a}
+, incluidos ambos límites;
+ tarde > {a}
+.",{m:S.f.morningCutoff,a:S.f.afternoonCutoff}
+)}
+</li>
+    <li>${t("Las semanas completamente vacías de planificación se excluyen de cobertura, ausencias, balance y fines de semana.")}
+</li>
+    <li>${t("Reglas de fin de semana")}
+: ≥ ${S.f.wkendReqFull}
+ ${t("fines completos")}
+, ≥ ${S.f.wkendReqSat}
+ ${t("sábados libres")}
+, ≥ ${S.f.wkendReqSun}
+ ${t("domingos libres")}
+.</li>
+    <li>${t("Las ausencias no se suman a la planificacion;
+ solo se usan como posible explicacion del deficit.")}
+</li>
+    <li>${t("Cambiar el selector vuelve a ejecutar todo el analisis sin mezclar fuentes.")}
+</li>
+    <li>${S.filenames.length>1?t("Se han combinado {n}
+ ficheros de la misma tienda para analizar el periodo completo.",{n:S.filenames.length}
+):t("Un fichero de la tienda se analiza como periodo independiente.")}
+</li>
+  </ul>
+  <p class="chart-note">${t("Réplica HTML autónoma del validador Streamlit. Cálculos verificados contra el motor Python original (paridad byte a byte en turnos, incidencias, horas semanales, balance y ausencias).")}
+</p>
+  </div>`;
+
+}
+
+
+/* ============================= Render orchestration =================== */
+const RENDERERS=[renderResumen,renderRestricciones,renderHoras,renderCobertura,renderBalance,renderAusencias,renderWeekends,renderMetodologia];
+
+function renderTab(){
+  TABLE_EXPORTS.clear();
+ TABLE_SEQ=0;
+
+  const F=S.frames;
+ const panel=document.getElementById("panel");
+
+  panel.innerHTML = S.tab===7? renderMetodologia() : RENDERERS[S.tab](F);
+
+  wireTabControls();
+
+}
+
+function filterWeekendMapRows(){
+  const tableEl=document.getElementById("weekendMapTable");
+ if(!tableEl) return;
+
+  const q=String(S.f.wkendMapQuery||"").trim().toLowerCase();
+
+  tableEl.querySelectorAll("tbody tr").forEach(row=>{
+    const matchesText=!q || String(row.dataset.search||"").includes(q);
+
+    const matchesAlert=!S.f.wkendMapA
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 11/14
+t i=S.f.wkStatus.indexOf(s);
+ if(i>=0)S.f.wkStatus.splice(i,1);
+ else S.f.wkStatus.push(s);
+ renderTab();
+ }
+));
+
+  on("wkWeek","change",e=>{S.f.wkWeek=e.target.value;
+renderTab();
+}
+);
+
+  on("wkEmp","input",e=>{S.f.wkEmp=e.target.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 12/14
+f(i>=0)S.f.wkStatus.splice(i,1);
+ else S.f.wkStatus.push(s);
+ renderTab();
+ }
+));
+
+  on("wkWeek","change",e=>{S.f.wkWeek=e.target.value;
+renderTab();
+}
+);
+
+  on("wkEmp","input",e=>{S.f.wkEmp=e.target.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 13/14
+t.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
 ;
 
-    }
-).sort((a,b)=>Number(b.alert)-Number(a.alert)||a.full-b.full||a.freeDays-b.freeDays||String(a.personId).localeCompare(String(b.personId)));
+  if(!S.cache[src]) S.cache[src]=D.runValidation(S.raw,src);
 
-    h+=`<div class="wkmap-controls"><input type="search" id="wkendMapSearch" placeholder="${t("Buscar empleado en el mapa")}
-" value="${esc(S.f.wkendMapQuery||"")}
-"><label class="chk"><input type="checkbox" id="wkendMapAlerts" ${S.f.wkendMapAlerts?"checked":""}
-> ${t("Mostrar solo alertas")}
-</label></div>`;
+  S.result=S.cache[src];
 
-    h+=`<div class="wkmap-wrap"><table class="wkmap" id="weekendMapTable"><thead><tr><th class="wk-employee">${t("Empleado")}
-</th><th class="wk-contract">${t("Horas contrato")}
-</th>`+
-      order.map(w=>`<th>${esc(w)}
-</th>`).join("")+`<th>${t("Resumen del periodo")}
-</th></tr></thead><tbody>`;
+  S.weekStarts=computeWeekStarts(S.result);
 
-    mapRows.forEach(row=>{
-      h+=`<tr data-search="${esc((row.id_tienda+" "+row.personId).toLowerCase())}
-" data-alert="${row.alert?"1":"0"}
-"><td class="wk-employee">${esc(row.id_tienda+" · "+row.personId)}
+  S.frames=buildFrames();
+
+  renderSidebarDynamic();
+
+  renderHeader();
+
+  renderContent();
+
+}
+
+function setWeek(idx){ S.weekIdx=idx;
+ S.frames=buildFrames();
+
+  S.f.wkendMin=null;
+ S.f.wkendMax=null;
+ S.f.wkStatus=null;
+
+  renderHeader();
+ renderContent();
+ }
+
+
+function renderHeader(){
+  const src=S.source, sd=S.sources[src];
+
+  document.getElementById("introMsg").style.display="none";
+
+  const store=S.result.store_id!=null?S.result.store_id:t("Sin identificar");
+
+  const now=new Date();
+ const stamp=`${String(now.getDate()).padStart(2,"0")}
+/${String(now.getMonth()+1).padStart(2,"0")}
+/${now.getFullYear()}
+ ${String(now.getHours()).padStart(2,"0")}
+:${String(now.getMinutes()).padStart(2,"0")}
+`;
+
+  let wf = S.weekIdx<0? t("Filtro semanal: periodo completo") : t("Filtro activo: {a}
+ - {b}
+",{a:dmy(S.weekStarts[S.weekIdx]),b:dmy(S.weekStarts[S.weekIdx]+6)}
+);
+
+  const fileMessage=S.filenames.length>1?t("Se han combinado {n}
+ ficheros de la misma tienda para analizar el periodo completo.",{n:S.filenames.length}
+):t("Un fichero de la tienda se analiza como periodo independiente.");
+
+  const period=S.combinedPeriod?`${dmy(S.combinedPeriod.start)}
+ - ${dmy(S.combinedPeriod.end)}
+`:"—";
+
+  const html=`<div class="source-box"><b>${t("Origen analizado:")}
+</b> ${esc(t(D.SCHEDULE_SOURCES[src]))}
+ (<code>
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendReqSun' 14/14
+mentById("dlBtn").addEventListener("click",downloadExcel);
+
+}
+
+function ensureHeaderBox(){ if(!document.getElementById("headerBox")){ const d=document.createElement("div");
+ d.id="headerBox";
+ const c=document.getElementById("content");
+ c.parentNode.insertBefore(d,c);
+ }
+ }
+
+
+function downloadExcel(){
+  const r=S.frames;
+ const src=S.source;
+
+  const sheets=[];
+
+  sheets.push({name:t("Informacion"),rows:[[t("Origen analizado"),src],[t("Descripcion"),t(D.SCHEDULE_SOURCES[src])],[t("Ficheros"),S.filenames.join(" | ")],[t("Periodo combinado"),S.combinedPeriod?D.dayISO(S.combinedPeriod.start)+" - "+D.dayISO(S.combinedPeriod.end):""],[t("Los turnos de mañana empiezan antes de"),S.f.morningCutoff],[t("Los turnos de tarde empiezan después de"),S.f.afternoonCutoff],[t("Mínimo fines de semana completos libres"),S.f.wkendReqFull],[t("Mínimo sábados libres"),S.f.wkendReqSat],[t("Mínimo domingos libres"),S.f.wkendReqSun]]}
+);
+
+  const sh=r.shifts.map(s=>[s.id_tienda,s.personId,s.applicableWorkingHours,s.day,s.hora_inicio,s.hora_fin,s.horas_totales,s.duracion_descanso,configurableShiftPeriod(s.hora_inicio,S.f.morningCutoff,S.f.afternoonCutoff)]);
+
+  sheets.push({name:t("Turnos"),rows:[["id_tienda","personId","applicableWorkingHours","day","hora_inicio","hora_fin","horas_totales","duracion_descanso","franja_turno"],...sh]}
+);
+
+  const sm=r.summaries;
+ const smc=sm.length?Object.keys(sm[0]):[t("Sin registros")];
+
+  sheets.push({name:t("Validacion mensual"),rows:[smc,...sm.map(o=>smc.map(k=>o[k]))]}
+);
+
+  const cc=contractChanges(sm);
+
+  sheets.push({name:t("Cambios contractuales"),rows:[["id_tienda","personId","Mes anterior","Horas mes anterior","Mes siguiente","Horas mes siguiente","Diferencia","Estado"],...cc.map(o=>[o.id_tienda,o.personId,o["Mes anterior"],o["Horas mes anterior"],o["Mes siguiente"],o["Horas mes siguiente"],o["Diferencia"],o.Estado])]}
+);
+
+  const inc=r.incidents.map(i=>[i.id_tienda,i.personId,i.mes,i.tipo_incidencia,i.fecha_inicio,i.fecha_fin,i.valor_observado,i.limite,i.detalle]);
+
+  sheets.push({name:t("Detalle incidencias"),rows:[["id_tienda","personId","mes","tipo_incidencia","fecha_inicio","fecha_fin","valor_observado","limite","detalle"],...inc]}
+);
+
+  const wk=r.weekly;
+ const wkc=wk.length?Object.keys(wk[0]):[t("Sin registros")];
+
+  sheets.push({name:t("Control horas semanal"),rows:[wkc,...wk.map(o=>wkc.map(k=>o[k]))]}
+);
+
+  const ab=r.absences.map(a=>[a.id_tienda,a.personI
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendAlerts' 1/7
+LE_EXPORTS.get(id);
+ if(!item) return;
+
+  const bytes=buildXlsx([{name:t("Tabla"),rows:[item.cols,...item.rows]}
+]);
+
+  const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+);
+
+  const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=`tabla_${S.tab+1}
+.xlsx`;
+ a.click();
+
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+
+}
+
+
+/* ============================= App state ============================== */
+const S = {
+  raw:null, rawFiles:[], fileInfo:[], filenames:[], combinedPeriod:null,
+  detection:null, sources:null, available:[], source:null,
+  cache:{}
+, result:null, filename:"", weekStarts:[], weekIdx:-1,
+  tab:0, frames:null,
+  f:{ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+,
+}
+;
+
+const TAB_KEYS=["Resumen","Restricciones","Horas contractuales","Cobertura diaria","Balance mañana/tarde","Ausencias","Fines de semana","Metodología"];
+
+function tabNames(){ return TAB_KEYS.map(k=>t(k));
+ }
+
+
+const D = WFV;
+ // motor
+function di(iso){ return D.parseDay(iso);
+ }
+        // ISO -> day int
+function dmy(dayInt){ return D.fmtDMY(dayInt);
+ }
+
+function ddmm(dayInt){ const {d,m}
+=D.dayYMD(dayInt);
+ return `${String(d).padStart(2,"0")}
+/${String(m).padStart(2,"0")}
+`;
+ }
+
+
+
+/* ---------- Carga y combinación de uno o dos meses ---------- */
+function parsePlanningText(text, filename){
+  let data;
+
+  try{ data=JSON.parse(String(text).replace(/^﻿/,""));
+ }
+
+  catch(e){ throw new Error(t("JSON no valido: {e}
+",{e:`${filename}
+: ${e.message}
+`}
+));
+ }
+
+  if(!data || typeof data!=="object" || Array.isArray(data)) throw new Error(t("La raiz del JSON debe ser un objeto."));
+
+  return data;
+
+}
+
+function planningDocumentInfo(data, filename){
+  const storeId=(data.store||{}
+).id;
+
+  if(storeId===null || storeId===undefined || storeId==="") throw new Error(`${filename}
+: ${t("El fichero no identifica la tienda.")}
+`);
+
+  if(!Array.isArray(data.storeDayTimes)) throw new Error(`${filename}
+: ${t("El campo storeDayTimes debe ser una lista.")}
+`);
+
+  const dates=[];
+ const seen=new Set();
+
+  for(const item of data.storeDayTimes){
+    if(!item || typeof item!=="object" || !item.operatingDate) continue;
+
+    const day=D.parseDay(item.operatingDate)
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendAlerts' 2/7
+ips" id="wkendDiag">`+diagSets.map((d,i)=>`<span class="chip ${S.f.wkendDiag===i?"on":""}
+" data-i="${i}
+">${d[0]}
+ (${d[1].length}
+)</span>`).join("")+`</div>`;
+
+  const cur=diagSets[S.f.wkendDiag][1];
+
+  if(!cur.length) h+=callout("info",t("No hay empleados en esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendAlerts' 3/7
+>`+diagSets.map((d,i)=>`<span class="chip ${S.f.wkendDiag===i?"on":""}
+" data-i="${i}
+">${d[0]}
+ (${d[1].length}
+)</span>`).join("")+`</div>`;
+
+  const cur=diagSets[S.f.wkendDiag][1];
+
+  if(!cur.length) h+=callout("info",t("No hay empleados en esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="blo
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendAlerts' 4/7
+)+`</div>`;
+
+  const cur=diagSets[S.f.wkendDiag][1];
+
+  if(!cur.length) h+=callout("info",t("No hay empleados en esta categoría."));
+
+  else{ const rows=[...cur].sort((a,b)=>a.fs-b.fs||a.sab-b.sab||a.dom-b.dom).map(e=>({Tienda:e.id_tienda,Empleado:e.personId,"Horas contrato":e.app,"Fines completos libres":e.fs,"Sábados libres":e.sab,"Domingos libres":e.dom}
+));
+
+    h+=table([tc("Tienda"),tc("Empleado"),tc("Horas contrato"),tc("Fines completos libres"),tc("Sábados libres"),tc("Domingos libres")],rows,{height:400,numCols:["Horas contrato","Fines completos libres","Sábados libres","Domingos libres"]}
+);
+ }
+
+  h+=`</div>`;
+
+  // resumen empleado-mes
+  h+=`<div class="block"><h3>${t("Resumen empleado-mes")}
+</h3><label class="chk"><input type="checkbox" id="wkendAlerts" ${S.f.wkendAlerts?"checked":""}
+> ${t("Mostrar solo empleado-mes con algún contador a cero")}
+</label>`;
+
+  let view=filtered;
+
+  if(S.f.wkendAlerts) view=view.filter(m=>m.fs_libres<S.f.wkendReqFull||m.sab_libres<S.f.wkendReqSat||m.dom_libres<S.f.wkendReqSun);
+
+  const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
+
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
+;
+ }
+)
+    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+
+  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
+)+`</div>`;
+
+  return h;
+
+}
+
+
+/* ---------- Metodología ---------- */
+function renderMetodologia(){
+  const src=S.source;
+
+  return `<div class="subhead">${t("Metodologia")}
+</div><div class="block md-body">
+  <p><b>${t("Origen seleccionado:")}
+</b> <code>${esc(src)}
+</code>. ${t("El motor lee exclusivamente")}
+ <code>dayTi
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendAlerts' 5/7
+wkWeek","change",e=>{S.f.wkWeek=e.target.value;
+renderTab();
+}
+);
+
+  on("wkEmp","input",e=>{S.f.wkEmp=e.target.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wk
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendAlerts' 6/7
+k=e.target.value;
+renderTab();
+}
+);
+
+  on("wkEmp","input",e=>{S.f.wkEmp=e.target.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+;
+
+  if(!S.
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendAlerts' 7/7
+);
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+;
+
+  if(!S.cache[src]) S.cache[src]=D.runValidation(S.raw,src);
+
+  S.result=S.cache[src];
+
+  S.weekStarts=computeWeekStarts(S.result);
+
+  S.frames=buildFrames();
+
+  renderSidebarDynamic();
+
+  renderHeader();
+
+  renderContent();
+
+}
+
+function setWeek(idx){ S.weekIdx=idx;
+ S.frames=buildFrames();
+
+  S.f.wkendMin=null;
+ S.f.wkendMax=null;
+ S.f.wkStatus=null;
+
+  renderHeader();
+ renderContent();
+ }
+
+
+function renderHeader(){
+  const src=S.source, sd=S.sources[src];
+
+  document.getElementById("introMsg").style.display="none";
+
+  const store=S.result.store_id!=null?S.result.store_id:t("Sin identificar");
+
+  const now=new Date();
+ const stamp=`${String(now.getDate()).padStart(2,"0")}
+/${String(now.getMonth()+1).padStart(2,"0")}
+/${now.getFullYear()}
+ ${String(now.getHours()).padStart(2,"0")}
+:${String(now.getMinutes()).padStart(2,"0")}
+`;
+
+  let wf = S.weekIdx<0? t("Filtro semanal: periodo completo") : t("Filtro activo: {a}
+ - {b}
+",{a:dmy(S.weekStarts[S.weekIdx]),b:dmy(S.weekStarts[S.weekIdx]+6)}
+);
+
+  const fileMessage=S.filenames.length>1?t("Se han combinado {n}
+ ficheros de la misma tienda para analizar el periodo completo.",{n:S.filenames.length}
+):t("Un fichero de la tienda se analiza como periodo independiente.");
+
+  const period=S.combinedPeriod?`${dmy(S.combinedPeriod.start)}
+ - ${dmy(S.combinedPeriod.end)}
+`:"—";
+
+  const html=`<div class="source-box"><b>${t("Origen analizado:")}
+</b> ${esc(t(D.SCHEDULE_SOURCES[src]))}
+ (<code>${esc(src)}
+</co
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendDiag' 1/7
+;
+ if(!item) return;
+
+  const bytes=buildXlsx([{name:t("Tabla"),rows:[item.cols,...item.rows]}
+]);
+
+  const blob=new Blob([bytes],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+);
+
+  const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=`tabla_${S.tab+1}
+.xlsx`;
+ a.click();
+
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+
+}
+
+
+/* ============================= App state ============================== */
+const S = {
+  raw:null, rawFiles:[], fileInfo:[], filenames:[], combinedPeriod:null,
+  detection:null, sources:null, available:[], source:null,
+  cache:{}
+, result:null, filename:"", weekStarts:[], weekIdx:-1,
+  tab:0, frames:null,
+  f:{ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+,
+}
+;
+
+const TAB_KEYS=["Resumen","Restricciones","Horas contractuales","Cobertura diaria","Balance mañana/tarde","Ausencias","Fines de semana","Metodología"];
+
+function tabNames(){ return TAB_KEYS.map(k=>t(k));
+ }
+
+
+const D = WFV;
+ // motor
+function di(iso){ return D.parseDay(iso);
+ }
+        // ISO -> day int
+function dmy(dayInt){ return D.fmtDMY(dayInt);
+ }
+
+function ddmm(dayInt){ const {d,m}
+=D.dayYMD(dayInt);
+ return `${String(d).padStart(2,"0")}
+/${String(m).padStart(2,"0")}
+`;
+ }
+
+
+
+/* ---------- Carga y combinación de uno o dos meses ---------- */
+function parsePlanningText(text, filename){
+  let data;
+
+  try{ data=JSON.parse(String(text).replace(/^﻿/,""));
+ }
+
+  catch(e){ throw new Error(t("JSON no valido: {e}
+",{e:`${filename}
+: ${e.message}
+`}
+));
+ }
+
+  if(!data || typeof data!=="object" || Array.isArray(data)) throw new Error(t("La raiz del JSON debe ser un objeto."));
+
+  return data;
+
+}
+
+function planningDocumentInfo(data, filename){
+  const storeId=(data.store||{}
+).id;
+
+  if(storeId===null || storeId===undefined || storeId==="") throw new Error(`${filename}
+: ${t("El fichero no identifica la tienda.")}
+`);
+
+  if(!Array.isArray(data.storeDayTimes)) throw new Error(`${filename}
+: ${t("El campo storeDayTimes debe ser una lista.")}
+`);
+
+  const dates=[];
+ const seen=new Set();
+
+  for(const item of data.storeDayTimes){
+    if(!item || typeof item!=="object" || !item.operatingDate) continue;
+
+    const day=D.parseDay(item.operatingDate);
+
+    if(seen.has(
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendDiag' 2/7
+loyee">${esc(row.id_tienda+" · "+row.personId)}
 ${row.alert?`<span class="wk-alert">${t("Alerta")}
 </span>`:""}
 </td><td class="wk-contract">${row.app==null?"—":fmt(row.app,1)+" h"}
@@ -216,178 +3834,12 @@ ${row.alert?`<span class="wk-alert">${t("Alerta")}
 
   const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
 
-    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
-;
- }
-)
-    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Hor
 
-  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
-)+`</div>`;
+===== WEEKEND STATE =====
 
-  return h;
-
-}
-
-
-/* ---------- Metodología ---------- */
-
-===== WEEKEND FUNCTION =====
-
-MARKER 't("Mapa empleado-fin de semana")'
-function renderWeekends(F){
-  let h=`<div class="subhead">${t("Fines de semana y rotación de descansos")}
-</div>`+help(t("Un fin de semana libre exige no trabajar ni el sábado ni el domingo. Sábados y domingos libres también se cuentan por separado, por empleado y mes."));
-
-  const {monthly,detail}
-=prepWeekend(F);
-
-  if(!monthly.length) return h+callout("warning",t("No hay información suficiente para calcular fines de semana."));
-
-  const availHours=monthly.map(m=>m.app).filter(v=>v!=null&&isFinite(v));
-
-  const obsMax=availHours.length?Math.max(...availHours):40;
- const limit=Math.max(80,obsMax);
-
-  if(S.f.wkendMin==null) S.f.wkendMin=Math.min(30,limit);
-
-  if(S.f.wkendMax==null) S.f.wkendMax=limit;
-
-  h+=`<div class="controls">
-    <div class="ctrl"><label>${t("Horas contractuales mínimas")}
-</label><input type="number" id="wkendMin" min="0" max="${limit}
-" step="1" value="${S.f.wkendMin}
-"></div>
-    <div class="ctrl"><label>${t("Horas contractuales máximas")}
-</label><input type="number" id="wkendMax" min="0" max="${limit}
-" step="1" value="${S.f.wkendMax}
-"></div>
-  </div>`;
-
-  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
-</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
-<div class="controls" style="grid-template-columns:repeat(3,1fr)">
-    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
-</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
-"></div>
-    <div class="ctrl"><label>${t("Mínimo sábados libres")}
-</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
-"></div>
-    <div class="ctrl"><label>${t("Mínimo domingos libres")}
-</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
-"></div>
-  </div><div class="chart-note">${t("Regla activa")}
-: ≥ ${S.f.wkendReqFull}
- ${t("fines completos")}
-, ≥ ${S.f.wkendReqSat}
- ${t("sábados libres")}
-, ≥ ${S.f.wkendReqSun}
- ${t("domingos libres")}
-.</div></div>`;
-
-  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
-
-  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
-
-  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
-
-  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
-
-  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
-
-  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
-
-  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
-    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
-));
-
-  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
-
-  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
-
-  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
-
-  h+=kpiGrid([
-    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
- y {b}
- h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
-),tone:"blue"}
-,
-    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
-,
-    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
-: ${S.f.wkendReqFull}
-`,tone:nWk.length?"red":"green"}
-,
-    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
-: ${S.f.wkendReqSat}
-`,tone:nSat.length?"red":"green"}
-,
-    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
-: ${S.f.wkendReqSun}
-`,tone:nSun.length?"red":"green"}
-,
-  ],5);
-
-  if(wends.length){
-    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
-</h3>`;
-
-    const gw=groupBy(wends,d=>d.ini);
- const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
-)).sort((a,b)=>a.ini-b.ini);
-
-    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
-))}
-,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
-))}
-,{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}
-))}
-],rot.map(r=>r.label),{h:390,dec:0}
-)+`</div>`;
-
-    // Mapa HTML con cabecera y columnas fijas, búsqueda y alertas.
-    h+=`<div class="block"><h3>${t("Mapa empleado-fin de semana")}
-</h3>`+help(t("El mapa mantiene fijas las columnas de empleado y contrato. Las filas con cero fines de semana completos se consideran alertas."));
-
-    const order=[...groupBy(wends,d=>d.ini).entries()].sort((a,b)=>Number(a[0])-Number(b[0])).map(([,rs])=>rs[0].fin);
-
-    const pv=new Map();
- wends.forEach(d=>pv.set((d.id_tienda+"|"+d.personId)+"|"+d.fin,(d.sat?1:0)+(d.sun?1:0)));
-
-    const mapRows=employees.map(e=>{
-      const key=e.id_tienda+"|"+e.personId;
-
-      const values=order.map(w=>pv.has(key+"|"+w)?pv.get(key+"|"+w):null);
-
-      const full=values.filter(v=>v===2).length;
-
-      const freeDays=sum(values.filter(v=>v!=null));
-
-      return {...e,key,values,full,freeDays,alert:failWk(e)||failSat(e)||failSun(e)}
-;
-
-    }
-).sort((a,b)=>Number(b.alert)-Number(a.alert)||a.full-b.full||a.freeDays-b.freeDays||String(a.personId).localeCompare(String(b.personId)));
-
-    h+=`<div class="wkmap-controls"><input type="search" id="wkendMapSearch" placeholder="${t("Buscar empleado en el mapa")}
-" value="${esc(S.f.wkendMapQuery||"")}
-"><label class="chk"><input type="checkbox" id="wkendMapAlerts" ${S.f.wkendMapAlerts?"checked":""}
-> ${t("Mostrar solo alertas")}
-</label></div>`;
-
-    h+=`<div class="wkmap-wrap"><table class="wkmap" id="weekendMapTable"><thead><tr><th class="wk-employee">${t("Empleado")}
-</th><th class="wk-contract">${t("Horas contrato")}
-</th>`+
-      order.map(w=>`<th>${esc(w)}
-</th>`).join("")+`<th>${t("Resumen del periodo")}
-</th></tr></thead><tbody>`;
-
-    mapRows.forEach(row=>{
-      h+=`<tr data-search="${esc((row.id_tienda+" "+row.personId).toLowerCase())}
-" data-alert="${row.alert?"1":"0"}
-"><td class="wk-employee">${esc(row.id_tienda+" · "+row.personId)}
-${row.alert?`<span class="wk-alert">${t("Alerta")}
+MARKER 'wkendDiag' 3/7
+?`<span class="wk-alert">${t("Alerta")}
 </span>`:""}
 </td><td class="wk-contract">${row.app==null?"—":fmt(row.app,1)+" h"}
 </td>`;
@@ -452,180 +3904,12 @@ ${row.alert?`<span class="wk-alert">${t("Alerta")}
 
   const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
 
-    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
-;
- }
-)
-    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.
 
-  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
-)+`</div>`;
+===== WEEKEND STATE =====
 
-  return h;
-
-}
-
-
-/* ---------- Metodología ---------- */
-
-===== WEEKEND FUNCTION =====
-
-MARKER 't("Fines completos")'
-function renderWeekends(F){
-  let h=`<div class="subhead">${t("Fines de semana y rotación de descansos")}
-</div>`+help(t("Un fin de semana libre exige no trabajar ni el sábado ni el domingo. Sábados y domingos libres también se cuentan por separado, por empleado y mes."));
-
-  const {monthly,detail}
-=prepWeekend(F);
-
-  if(!monthly.length) return h+callout("warning",t("No hay información suficiente para calcular fines de semana."));
-
-  const availHours=monthly.map(m=>m.app).filter(v=>v!=null&&isFinite(v));
-
-  const obsMax=availHours.length?Math.max(...availHours):40;
- const limit=Math.max(80,obsMax);
-
-  if(S.f.wkendMin==null) S.f.wkendMin=Math.min(30,limit);
-
-  if(S.f.wkendMax==null) S.f.wkendMax=limit;
-
-  h+=`<div class="controls">
-    <div class="ctrl"><label>${t("Horas contractuales mínimas")}
-</label><input type="number" id="wkendMin" min="0" max="${limit}
-" step="1" value="${S.f.wkendMin}
-"></div>
-    <div class="ctrl"><label>${t("Horas contractuales máximas")}
-</label><input type="number" id="wkendMax" min="0" max="${limit}
-" step="1" value="${S.f.wkendMax}
-"></div>
-  </div>`;
-
-  h+=`<div class="block"><h3>${t("Reglas de descanso de fin de semana")}
-</h3>${help(t("Introduce por teclado el mínimo exigido en el periodo analizado. Un valor 0 desactiva la regla."))}
-<div class="controls" style="grid-template-columns:repeat(3,1fr)">
-    <div class="ctrl"><label>${t("Mínimo fines de semana completos libres")}
-</label><input type="number" id="wkendReqFull" min="0" step="1" value="${S.f.wkendReqFull}
-"></div>
-    <div class="ctrl"><label>${t("Mínimo sábados libres")}
-</label><input type="number" id="wkendReqSat" min="0" step="1" value="${S.f.wkendReqSat}
-"></div>
-    <div class="ctrl"><label>${t("Mínimo domingos libres")}
-</label><input type="number" id="wkendReqSun" min="0" step="1" value="${S.f.wkendReqSun}
-"></div>
-  </div><div class="chart-note">${t("Regla activa")}
-: ≥ ${S.f.wkendReqFull}
- ${t("fines completos")}
-, ≥ ${S.f.wkendReqSat}
- ${t("sábados libres")}
-, ≥ ${S.f.wkendReqSun}
- ${t("domingos libres")}
-.</div></div>`;
-
-  if(S.f.wkendMin>S.f.wkendMax) return h+callout("warning",t("Las horas mínimas no pueden ser superiores a las horas máximas."));
-
-  const filtered=monthly.filter(m=>m.app!=null&&m.app>=S.f.wkendMin&&m.app<=S.f.wkendMax);
-
-  if(!filtered.length) return h+callout("warning",t("No hay empleados que cumplan el rango contractual seleccionado."));
-
-  const keys=new Set(filtered.map(m=>m.id_tienda+"|"+m.personId));
-
-  const wends=detail.filter(d=>keys.has(d.id_tienda+"|"+d.personId));
-
-  const ge=groupBy(filtered,m=>m.id_tienda+"|"+m.personId);
-
-  const employees=[...ge.values()].map(rs=>({id_tienda:rs[0].id_tienda,personId:rs[0].personId,app:Math.max(...rs.map(r=>r.app)),
-    fs:sum(rs.map(r=>r.fs_libres)),sab:sum(rs.map(r=>r.sab_libres)),dom:sum(rs.map(r=>r.dom_libres))}
-));
-
-  employees.sort((a,b)=>(b.app??-Infinity)-(a.app??-Infinity)||String(a.personId).localeCompare(String(b.personId)));
-
-  const failWk=e=>e.fs<S.f.wkendReqFull, failSat=e=>e.sab<S.f.wkendReqSat, failSun=e=>e.dom<S.f.wkendReqSun;
-
-  const nWk=employees.filter(failWk), nSat=employees.filter(failSat), nSun=employees.filter(failSun), nAny=employees.filter(e=>failWk(e)||failSat(e)||failSun(e));
-
-  h+=kpiGrid([
-    {label:t("Empleados analizados"),value:fmt(employees.length),detail:t("Contrato entre {a}
- y {b}
- h",{a:fmt(S.f.wkendMin),b:fmt(S.f.wkendMax)}
-),tone:"blue"}
-,
-    {label:t("Con alguna incidencia"),value:fmt(nAny.length),detail:pctText(pct(nAny.length,employees.length)),tone:nAny.length?"red":"green"}
-,
-    {label:t("Incumplen fines completos"),value:fmt(nWk.length),detail:`${t("Mínimo")}
-: ${S.f.wkendReqFull}
-`,tone:nWk.length?"red":"green"}
-,
-    {label:t("Incumplen sábados"),value:fmt(nSat.length),detail:`${t("Mínimo")}
-: ${S.f.wkendReqSat}
-`,tone:nSat.length?"red":"green"}
-,
-    {label:t("Incumplen domingos"),value:fmt(nSun.length),detail:`${t("Mínimo")}
-: ${S.f.wkendReqSun}
-`,tone:nSun.length?"red":"green"}
-,
-  ],5);
-
-  if(wends.length){
-    h+=`<div class="block"><h3>${t("Rotación por fin de semana")}
-</h3>`;
-
-    const gw=groupBy(wends,d=>d.ini);
- const rot=[...gw.entries()].map(([ini,rs])=>({ini:Number(ini),label:rs[0].fin,comp:rs.filter(r=>r.libre).length,sab:rs.filter(r=>r.sat).length,dom:rs.filter(r=>r.sun).length}
-)).sort((a,b)=>a.ini-b.ini);
-
-    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}
-))}
-,{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}
-))}
-,{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}
-))}
-],rot.map(r=>r.label),{h:390,dec:0}
-)+`</div>`;
-
-    // Mapa HTML con cabecera y columnas fijas, búsqueda y alertas.
-    h+=`<div class="block"><h3>${t("Mapa empleado-fin de semana")}
-</h3>`+help(t("El mapa mantiene fijas las columnas de empleado y contrato. Las filas con cero fines de semana completos se consideran alertas."));
-
-    const order=[...groupBy(wends,d=>d.ini).entries()].sort((a,b)=>Number(a[0])-Number(b[0])).map(([,rs])=>rs[0].fin);
-
-    const pv=new Map();
- wends.forEach(d=>pv.set((d.id_tienda+"|"+d.personId)+"|"+d.fin,(d.sat?1:0)+(d.sun?1:0)));
-
-    const mapRows=employees.map(e=>{
-      const key=e.id_tienda+"|"+e.personId;
-
-      const values=order.map(w=>pv.has(key+"|"+w)?pv.get(key+"|"+w):null);
-
-      const full=values.filter(v=>v===2).length;
-
-      const freeDays=sum(values.filter(v=>v!=null));
-
-      return {...e,key,values,full,freeDays,alert:failWk(e)||failSat(e)||failSun(e)}
-;
-
-    }
-).sort((a,b)=>Number(b.alert)-Number(a.alert)||a.full-b.full||a.freeDays-b.freeDays||String(a.personId).localeCompare(String(b.personId)));
-
-    h+=`<div class="wkmap-controls"><input type="search" id="wkendMapSearch" placeholder="${t("Buscar empleado en el mapa")}
-" value="${esc(S.f.wkendMapQuery||"")}
-"><label class="chk"><input type="checkbox" id="wkendMapAlerts" ${S.f.wkendMapAlerts?"checked":""}
-> ${t("Mostrar solo alertas")}
-</label></div>`;
-
-    h+=`<div class="wkmap-wrap"><table class="wkmap" id="weekendMapTable"><thead><tr><th class="wk-employee">${t("Empleado")}
-</th><th class="wk-contract">${t("Horas contrato")}
-</th>`+
-      order.map(w=>`<th>${esc(w)}
-</th>`).join("")+`<th>${t("Resumen del periodo")}
-</th></tr></thead><tbody>`;
-
-    mapRows.forEach(row=>{
-      h+=`<tr data-search="${esc((row.id_tienda+" "+row.personId).toLowerCase())}
-" data-alert="${row.alert?"1":"0"}
-"><td class="wk-employee">${esc(row.id_tienda+" · "+row.personId)}
-${row.alert?`<span class="wk-alert">${t("Alerta")}
-</span>`:""}
-</td><td class="wk-contract">${row.app==null?"—":fmt(row.app,1)+" h"}
+MARKER 'wkendDiag' 4/7
+ h"}
 </td>`;
 
       row.values.forEach(v=>{ h+=`<td>${v==null?"":`<span class="wk-cell wk-${v}
@@ -688,18 +3972,320 @@ ${row.alert?`<span class="wk-alert">${t("Alerta")}
 
   const rows=view.map(m=>{ const alerts=[[m.fs_libres<S.f.wkendReqFull,t("Fines completos < ")+S.f.wkendReqFull],[m.sab_libres<S.f.wkendReqSat,t("Sábados < ")+S.f.wkendReqSat],[m.dom_libres<S.f.wkendReqSun,t("Domingos < ")+S.f.wkendReqSun]].filter(x=>x[0]).map(x=>x[1]);
 
-    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval.":m.dom_eval,"Alerta":alerts.join(", ")||t("Sin alertas")}
-;
- }
-)
-    .sort((a,b)=>a.Alerta.localeCompare(b.Alerta)||a.Mes.localeCompare(b.Mes)||String(a.personId).localeCompare(String(b.personId)));
+    return {Mes:m.Mes,id_tienda:m.id_tienda,personId:m.personId,"Horas contrato":m.app,"Fines libres":m.fs_libres,"Fines eval.":m.fs_eval,"Sábados libres":m.sab_libres,"Sábados eval.":m.sab_eval,"Domingos libres":m.dom_libres,"Domingos eval."
 
-  h+=table([tc("Mes"),tc("id_tienda"),tc("personId"),tc("Horas contrato"),tc("Fines libres"),tc("Fines eval."),tc("Sábados libres"),tc("Sábados eval."),tc("Domingos libres"),tc("Domingos eval."),tc("Alerta")],rows,{height:480,numCols:["Horas contrato","Fines libres","Fines eval.","Sábados libres","Sábados eval.","Domingos libres","Domingos eval."]}
-)+`</div>`;
+===== WEEKEND STATE =====
 
-  return h;
+MARKER 'wkendDiag' 5/7
+t.value;
+renderTab();
+}
+);
+
+  on("balNon","change",e=>{S.f.balNon=e.target.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
 
 }
 
 
-/* ---------- Metodología ---------- */
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+;
+
+  if(!S.cache[src]) S.cache[src]=D.runValidation(S.raw,src);
+
+  S.result=S.cache[src
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendDiag' 6/7
+arget.checked;
+renderTab();
+}
+);
+
+  on("morningCutoff","change",e=>{S.f.morningCutoff=e.target.value||"11:00";
+renderTab();
+}
+);
+
+  on("afternoonCutoff","change",e=>{S.f.afternoonCutoff=e.target.value||"14:00";
+renderTab();
+}
+);
+
+  on("wkendMin","change",e=>{S.f.wkendMin=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendMax","change",e=>{S.f.wkendMax=Number(e.target.value);
+renderTab();
+}
+);
+
+  on("wkendReqFull","change",e=>{S.f.wkendReqFull=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSat","change",e=>{S.f.wkendReqSat=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendReqSun","change",e=>{S.f.wkendReqSun=Math.max(0,Math.floor(Number(e.target.value)||0));
+renderTab();
+}
+);
+
+  on("wkendAlerts","change",e=>{S.f.wkendAlerts=e.target.checked;
+renderTab();
+}
+);
+
+  document.querySelectorAll("#wkendDiag .chip").forEach(c=>c.addEventListener("click",()=>{S.f.wkendDiag=Number(c.dataset.i);
+renderTab();
+}
+));
+
+  on("wkendMapSearch","input",e=>{S.f.wkendMapQuery=e.target.value;
+filterWeekendMapRows();
+}
+);
+
+  on("wkendMapAlerts","change",e=>{S.f.wkendMapAlerts=e.target.checked;
+filterWeekendMapRows();
+}
+);
+
+  document.querySelectorAll("[data-table-export]").forEach(btn=>btn.addEventListener("click",()=>downloadTableXlsx(btn.dataset.tableExport)));
+
+  filterWeekendMapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+;
+
+  if(!S.cache[src]) S.cache[src]=D.runValidation(S.raw,src);
+
+  S.result=S.cache[src];
+
+  S.weekStarts=computeWeekStarts(S.result);
+
+  S.frames=buildFr
+
+===== WEEKEND STATE =====
+
+MARKER 'wkendDiag' 7/7
+MapRows();
+
+}
+
+
+function renderContent(){
+  const src=S.source;
+
+  let tabsHtml=`<div class="tabs">`+tabNames().map((n,i)=>`<button class="tab ${i===S.tab?"active":""}
+" data-i="${i}
+">${n}
+</button>`).join("")+`</div><div id="panel" class="panel active"></div>`;
+
+  document.getElementById("content").innerHTML=tabsHtml;
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ S.tab=Number(t.dataset.i);
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+ renderTab();
+ }
+));
+
+  renderTab();
+
+}
+
+
+/* ============================= Sidebar / load ========================= */
+function selectSource(src){
+  S.source=src;
+ S.tab=0;
+ S.weekIdx=-1;
+
+  S.f={ wkDev:true, wkStatus:null, wkWeek:"Todas", wkEmp:"", balNon:true, morningCutoff:"11:00", afternoonCutoff:"14:00", wkendMin:null, wkendMax:null, wkendReqFull:1, wkendReqSat:1, wkendReqSun:1, wkendAlerts:true, wkendDiag:0, wkendMapQuery:"", wkendMapAlerts:false }
+;
+
+  if(!S.cache[src]) S.cache[src]=D.runValidation(S.raw,src);
+
+  S.result=S.cache[src];
+
+  S.weekStarts=computeWeekStarts(S.result);
+
+  S.frames=buildFrames();
+
+  renderSidebarDynamic();
+
+  renderHeader();
+
+  renderContent();
+
+}
+
+function setWeek(idx){ S.weekIdx=idx;
+ S.frames=buildFrames();
+
+  S.f.wkendMin=null;
+ S.f.wkendMax=null;
+ S.f.wkStatus=null;
+
+  renderHeader();
+ renderContent();
+ }
+
+
+function renderHeader(){
+  const src=S.source, sd=S.sources[src];
+
+  document.getElementById("introMsg").style.display="none";
+
+  const store=S.result.store_id!=null?S.result.store_id:t("Sin identificar");
+
+  const now=new Date();
+ const stamp=`${String(now.getDate()).padStart(2,"0")}
+/${String(now.getMonth()+1).padStart(2,"0")}
+/${now.getFullYear()}
+ ${String(now.getHours()).padStart(2,"0")}
+:${String(now.getMinutes()).padStart(2,"0")}
+`;
+
+  let wf = S.weekIdx<0? t("Filtro semanal: periodo completo") : t("Filtro activo: {a}
+ - {b}
+",{a:dmy(S.weekStarts[S.weekIdx]),b:dmy(S.weekStarts[S.weekIdx]+6)}
+);
+
+  const fileMessage=S.filenames.length>1?t("Se han combinado {n}
+ ficheros de la misma tienda para analizar el periodo completo.",{n:S.filenames.length}
+):t("Un fichero de la tienda se analiza como periodo independiente.");
+
+  const period=S.combinedPeriod?`${dmy(S.combinedPeriod.start)}
+ - ${dmy(S.combinedPeriod.end)}
+`:"—";
+
+  const html=`<div class="source-box"><b>${t("Origen analizado:")}
+</b> ${esc(t(D.SCHEDULE_SOURCES[src]))}
+ (<code>${esc(src)}
+</code>). ${fileMessag
