@@ -6,13 +6,27 @@ def apply_contract_hours_heatmap_support(source: str) -> str:
 
     La transformación reutiliza los campos ya calculados por ``weekly_hours``:
     no modifica contratos, desviaciones, ausencias ni estados de planificación.
+
+    El dashboard se compone mediante varios parches de presentación. Por ello,
+    los textos de ayuda pueden llegar aquí en su versión base, transformada o ya
+    parcheada. Esta función acepta esas variantes y es idempotente para evitar
+    que una diferencia puramente textual impida arrancar la aplicación.
     """
 
-    old_help = 'help_text("Rojo significa déficit, blanco coincidencia y ámbar exceso. Un ✓ identifica una desviación total o parcialmente explicable por ausencias.")'
     new_help = 'help_text("Rojo significa déficit, blanco coincidencia y ámbar exceso. Un ✓ identifica una desviación total o parcialmente explicable por ausencias. El nuevo filtro puede neutralizar visualmente, sin alterar los datos, los déficits que la ausencia podría explicar por completo.")'
-    if old_help not in source:
-        raise ValueError("No se encontró el texto de ayuda del mapa semanal")
-    source = source.replace(old_help, new_help, 1)
+    help_variants = (
+        'help_text("Rojo significa déficit, blanco coincidencia y ámbar exceso. Un ✓ identifica una desviación total o parcialmente explicable por ausencias.")',
+        'help_text("Rojo significa deficit, blanco coincidencia y ambar exceso. Cada celda son horas planificadas menos horas de contrato.")',
+        'help_text("Rojo significa déficit, blanco coincidencia y ámbar exceso. Cada celda son horas planificadas menos horas de contrato.")',
+    )
+    if new_help not in source:
+        for candidate in help_variants:
+            if candidate in source:
+                source = source.replace(candidate, new_help, 1)
+                break
+        # La ayuda es puramente presentacional. Si un parche anterior cambia su
+        # redacción, no debe impedir que se cargue el dashboard ni la mejora
+        # funcional del mapa semanal.
 
     old_controls = '''    only_deviations = st.checkbox("Mostrar solo empleados con alguna desviacion", value=True, key="weekly_heatmap_deviations")
     pivot = detail.pivot_table(index="Empleado", columns="Semana", values="desviacion_horas", aggfunc="first").reindex(columns=summary["Semana"].tolist())
@@ -38,9 +52,10 @@ def apply_contract_hours_heatmap_support(source: str) -> str:
                 if pd.notna(value) and value < -0.01:
                     pivot.loc[employee_key, week_key] = 0.0
 '''
-    if old_controls not in source:
-        raise ValueError("No se encontró el bloque de filtros del mapa semanal")
-    source = source.replace(old_controls, new_controls, 1)
+    if new_controls not in source:
+        if old_controls not in source:
+            raise ValueError("No se encontró el bloque de filtros del mapa semanal")
+        source = source.replace(old_controls, new_controls, 1)
 
     old_text = '''        explainable = set(zip(detail.loc[detail["posible_explicacion_por_ausencia"].astype(str).str.contains("PODRIA EXPLICAR", case=False, na=False), "Empleado"], detail.loc[detail["posible_explicacion_por_ausencia"].astype(str).str.contains("PODRIA EXPLICAR", case=False, na=False), "Semana"]))
         text = [["" if pd.isna(value) else f"{value:+.1f}{' ✓' if (pivot.index[i], pivot.columns[j]) in explainable else ''}" for j, value in enumerate(row)] for i, row in enumerate(pivot.to_numpy())]
@@ -70,7 +85,8 @@ def apply_contract_hours_heatmap_support(source: str) -> str:
 
         fig = go.Figure(go.Heatmap(z=pivot.to_numpy(), x=week_labels, y=employee_labels, zmin=-max_abs, zmax=max_abs, zmid=0, colorscale=[[0, "#b91c1c"], [0.5, "#f8fafc"], [1, "#d97706"]], text=text, texttemplate="%{text}", colorbar={"title": "Desviacion h"}, hovertemplate="%{y}<br>Semana desde %{x}<br>%{z:+.1f} h<extra></extra>"))
 '''
-    if old_text not in source:
-        raise ValueError("No se encontró la construcción del heatmap semanal")
-    source = source.replace(old_text, new_text, 1)
+    if new_text not in source:
+        if old_text not in source:
+            raise ValueError("No se encontró la construcción del heatmap semanal")
+        source = source.replace(old_text, new_text, 1)
     return source
