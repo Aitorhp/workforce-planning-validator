@@ -48,10 +48,14 @@ def build_dashboard_source() -> str:
             + ", ".join(missing)
         )
 
-    # Syntax validation is performed before Streamlit executes any top-level UI code.
     compile(source, "app.py", "exec")
     return source
 
 
-source = build_dashboard_source()
-exec(compile(source, "app.py", "exec"), {"__name__": "__main__", "__file__": "app.py"})
+def run_dashboard() -> None:
+    source = build_dashboard_source()
+    exec(compile(source, "app.py", "exec"), {"__name__": "__main__", "__file__": "app.py"})
+
+
+if __name__ == "__main__":
+    run_dashboard()
