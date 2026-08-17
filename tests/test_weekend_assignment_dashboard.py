@@ -1,10 +1,7 @@
 import pandas as pd
 
-from weekend_assignment_dashboard import (
-    _build_weekend_states,
-    apply_weekend_assignment_support,
-    evaluate_weekend_assignment,
-)
+from weekend_assignment_dashboard import _build_weekend_states, evaluate_weekend_assignment
+from weekend_assignment_integration import apply_weekend_assignment_support
 
 
 def _states(free_days, start="2026-08-01", end="2026-08-31"):
@@ -74,16 +71,25 @@ def test_different_days_of_same_weekend_can_satisfy_different_day_rules():
     assert result["incumple_alguna_regla"] is False
 
 
-def test_source_patch_replaces_only_weekend_renderer():
-    tabs = 'tabs = st.tabs(["Resumen", "Restricciones", "Horas contractuales", "Cobertura diaria", "Balance mañana/tarde", "Ausencias", "Fines de semana", "Metodologia"])'
+def test_source_patch_replaces_only_weekend_renderer_and_preserves_neighbors():
     source = (
         "from validator_engine import (\n    x,\n)\n"
         "def render_weekends(frames, data_dates):\n    return 'legacy'\n\n"
-        + tabs
-        + "\n"
+        "def render_summary(frames):\n    return 'summary'\n\n"
+        "def render_restrictions(frames):\n    return 'restrictions'\n\n"
+        "def render_weekly(frames):\n    return 'weekly'\n\n"
+        "def render_coverage(frames, data_dates):\n    return 'coverage'\n\n"
+        "def render_shift_balance(frames):\n    return 'balance'\n\n"
+        "def render_absences(frames):\n    return 'absences'\n\n"
     )
     patched = apply_weekend_assignment_support(source)
     assert "weekend_assignment_dashboard import evaluate_weekend_rule_table" in patched
     assert "Mínimo de sábados o domingos libres" in patched
     assert "No combinable sin reutilizar días" in patched
     assert "return 'legacy'" not in patched
+    assert "def render_summary(frames):" in patched
+    assert "def render_restrictions(frames):" in patched
+    assert "def render_weekly(frames):" in patched
+    assert "def render_coverage(frames, data_dates):" in patched
+    assert "def render_shift_balance(frames):" in patched
+    assert "def render_absences(frames):" in patched
