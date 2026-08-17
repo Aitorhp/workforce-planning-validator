@@ -9,6 +9,7 @@ from dashboard_extensions import apply_extensions
 from multi_file_dashboard import apply_multi_file_support
 from review_iteration_dashboard import apply_review_iteration_support
 from weekend_assignment_integration import apply_weekend_assignment_support
+from workforce_insights_dashboard import apply_workforce_insights_support
 
 
 REQUIRED_DASHBOARD_RENDERERS = (
@@ -19,6 +20,7 @@ REQUIRED_DASHBOARD_RENDERERS = (
     "def render_shift_balance(frames):",
     "def render_absences(frames):",
     "def render_weekends(frames, data_dates):",
+    "def render_workforce_mix(frames):",
 )
 
 
@@ -40,6 +42,7 @@ def build_dashboard_source() -> str:
     source = apply_review_iteration_support(source)
     source = apply_weekend_assignment_support(source)
     source = apply_contract_hours_heatmap_support(source)
+    source = apply_workforce_insights_support(source)
 
     missing = [renderer for renderer in REQUIRED_DASHBOARD_RENDERERS if renderer not in source]
     if missing:
