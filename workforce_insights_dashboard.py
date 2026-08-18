@@ -82,48 +82,48 @@ NEW_WEEKEND_ROTATION = r'''        st.markdown("#### Rotación por fin de semana
         total_employees = max(int(len(employees)), 1)
         rotation["porcentaje_plantilla"] = rotation["fin_semana_completo"] / total_employees * 100.0
         rotation["etiqueta_descanso"] = rotation.apply(
-            lambda row: f'{int(row["fin_semana_completo"])} · {row["porcentaje_plantilla"]:.0f}%',
+            lambda row: f'{int(row["fin_semana_completo"])} empleados · {row["porcentaje_plantilla"]:.0f}%',
             axis=1,
         )
 
-        rotation_cols = st.columns([1.15, 1.0])
-        with rotation_cols[0]:
-            st.caption("Evolución de descansos por tipo")
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=rotation["inicio_fin_semana"], y=rotation["fin_semana_completo"], mode="lines+markers", name="Fin de semana completo"))
-            fig.add_trace(go.Scatter(x=rotation["inicio_fin_semana"], y=rotation["sabado_libre"], mode="lines+markers", name="Sábado libre"))
-            fig.add_trace(go.Scatter(x=rotation["inicio_fin_semana"], y=rotation["domingo_libre"], mode="lines+markers", name="Domingo libre"))
-            fig.update_layout(
-                height=255,
-                xaxis_title=None,
-                yaxis_title="Empleados libres",
-                hovermode="x unified",
-                margin=dict(l=15, r=15, t=10, b=25),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        st.caption("Evolución de descansos por tipo")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=rotation["inicio_fin_semana"], y=rotation["fin_semana_completo"], mode="lines+markers", name="Fin de semana completo"))
+        fig.add_trace(go.Scatter(x=rotation["inicio_fin_semana"], y=rotation["sabado_libre"], mode="lines+markers", name="Sábado libre"))
+        fig.add_trace(go.Scatter(x=rotation["inicio_fin_semana"], y=rotation["domingo_libre"], mode="lines+markers", name="Domingo libre"))
+        fig.update_layout(
+            height=255,
+            xaxis_title=None,
+            yaxis_title="Empleados libres",
+            hovermode="x unified",
+            margin=dict(l=15, r=15, t=10, b=25),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-        with rotation_cols[1]:
-            st.caption("Peso de la plantilla con fin de semana completo libre")
-            fig_pct = go.Figure(go.Bar(
-                x=rotation["Fin de semana"],
-                y=rotation["porcentaje_plantilla"],
-                text=rotation["etiqueta_descanso"],
-                textposition="auto",
-                customdata=rotation[["fin_semana_completo"]].to_numpy(),
-                hovertemplate="%{x}<br>%{customdata[0]} empleados<br>%{y:.1f}% de la plantilla<extra></extra>",
-            ))
-            fig_pct.update_layout(
-                height=255,
-                xaxis_title=None,
-                yaxis_title="% de plantilla",
-                yaxis=dict(range=[0, 100], ticksuffix="%"),
-                margin=dict(l=15, r=15, t=10, b=25),
-                showlegend=False,
-            )
-            st.plotly_chart(fig_pct, use_container_width=True)
+        st.markdown("#### Magnitud del descanso por fin de semana")
         st.caption(
-            f"Porcentaje calculado sobre {len(employees)} empleado(s) incluidos en el rango contractual seleccionado."
+            "Empleados con sábado y domingo libres en cada fin de semana y peso que representan sobre la plantilla analizada."
+        )
+        fig_pct = go.Figure(go.Bar(
+            x=rotation["Fin de semana"],
+            y=rotation["porcentaje_plantilla"],
+            text=rotation["etiqueta_descanso"],
+            textposition="auto",
+            customdata=rotation[["fin_semana_completo"]].to_numpy(),
+            hovertemplate="%{x}<br>%{customdata[0]} empleados con fin de semana completo libre<br>%{y:.1f}% de la plantilla<extra></extra>",
+        ))
+        fig_pct.update_layout(
+            height=310,
+            xaxis_title="Fin de semana",
+            yaxis_title="% de plantilla con fin de semana completo libre",
+            yaxis=dict(range=[0, 100], ticksuffix="%"),
+            margin=dict(l=15, r=15, t=10, b=35),
+            showlegend=False,
+        )
+        st.plotly_chart(fig_pct, use_container_width=True)
+        st.caption(
+            f"Base del porcentaje: {len(employees)} empleado(s) incluidos en el rango contractual seleccionado."
         )
 '''
 
@@ -223,10 +223,11 @@ def render_workforce_mix(frames):
 
 
 def apply_workforce_insights_support(source: str) -> str:
-    """Add workforce-mix presentation and compact weekend visuals."""
-    if OLD_WEEKEND_ROTATION not in source:
-        raise RuntimeError("No se encontró la gráfica de rotación de fin de semana esperada.")
-    source = source.replace(OLD_WEEKEND_ROTATION, NEW_WEEKEND_ROTATION, 1)
+    """Add workforce-mix presentation and explicit weekend magnitude visual."""
+    if NEW_WEEKEND_ROTATION not in source:
+        if OLD_WEEKEND_ROTATION not in source:
+            raise RuntimeError("No se encontró la gráfica de rotación de fin de semana esperada.")
+        source = source.replace(OLD_WEEKEND_ROTATION, NEW_WEEKEND_ROTATION, 1)
 
     import_marker = "from validator_engine import ("
     import_line = "from workforce_insights_dashboard import prepare_workforce_mix\n\n"
@@ -236,19 +237,21 @@ def apply_workforce_insights_support(source: str) -> str:
         source = source.replace(import_marker, import_line + import_marker, 1)
 
     renderer_marker = "\ndef render_weekends(frames, data_dates):"
-    if renderer_marker not in source:
-        raise RuntimeError("No se encontró render_weekends para insertar Mix de plantilla.")
-    source = source.replace(
-        renderer_marker,
-        "\n" + MIX_RENDERER.rstrip() + "\n\n" + renderer_marker,
-        1,
-    )
+    if "\ndef render_workforce_mix(frames):" not in source:
+        if renderer_marker not in source:
+            raise RuntimeError("No se encontró render_weekends para insertar Mix de plantilla.")
+        source = source.replace(
+            renderer_marker,
+            "\n" + MIX_RENDERER.rstrip() + "\n\n" + renderer_marker,
+            1,
+        )
 
     old_tabs = 'tabs = st.tabs(["Resumen", "Restricciones", "Horas contractuales", "Cobertura diaria", "Balance mañana/tarde", "Ausencias", "Fines de semana", "Metodologia"])'
     new_tabs = 'tabs = st.tabs(["Resumen", "Restricciones", "Horas contractuales", "Cobertura diaria", "Balance mañana/tarde", "Ausencias", "Fines de semana", "Mix de plantilla", "Metodologia"])'
-    if old_tabs not in source:
-        raise RuntimeError("No se encontró la declaración de pestañas esperada.")
-    source = source.replace(old_tabs, new_tabs, 1)
+    if new_tabs not in source:
+        if old_tabs not in source:
+            raise RuntimeError("No se encontró la declaración de pestañas esperada.")
+        source = source.replace(old_tabs, new_tabs, 1)
 
     old_dispatch = "with tabs[6]: render_weekends(frames, filtered_data_dates)\nwith tabs[7]:"
     new_dispatch = (
@@ -256,7 +259,8 @@ def apply_workforce_insights_support(source: str) -> str:
         "with tabs[7]: render_workforce_mix(frames)\n"
         "with tabs[8]:"
     )
-    if old_dispatch not in source:
-        raise RuntimeError("No se encontró el enrutado de pestañas esperado.")
-    source = source.replace(old_dispatch, new_dispatch, 1)
+    if new_dispatch not in source:
+        if old_dispatch not in source:
+            raise RuntimeError("No se encontró el enrutado de pestañas esperado.")
+        source = source.replace(old_dispatch, new_dispatch, 1)
     return source
