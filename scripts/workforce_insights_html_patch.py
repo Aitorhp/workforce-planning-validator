@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 
 def _replace_one(source: str, old: str, new: str, label: str) -> str:
     found = source.count(old)
@@ -13,65 +11,24 @@ def _replace_one(source: str, old: str, new: str, label: str) -> str:
 
 
 def _insert_mix_tab(source: str) -> str:
-    candidates = (
-        ('["weekends","Fines de semana"],["methodology","Metodología"]', '["weekends","Fines de semana"],["workforceMix","Mix de plantilla"],["methodology","Metodología"]'),
-        ('["weekends","Fines de semana"],["methodology","Metodologia"]', '["weekends","Fines de semana"],["workforceMix","Mix de plantilla"],["methodology","Metodologia"]'),
-        ('["weekends","Fines de semana"],["method","Metodología"]', '["weekends","Fines de semana"],["workforceMix","Mix de plantilla"],["method","Metodología"]'),
-        ('["weekends","Fines de semana"],["method","Metodologia"]', '["weekends","Fines de semana"],["workforceMix","Mix de plantilla"],["method","Metodologia"]'),
-    )
-    for old, new in candidates:
-        if old in source:
-            return source.replace(old, new, 1)
-
-    pattern = re.compile(
-        r'(\[\s*["\']weekends["\']\s*,\s*["\']Fines de semana["\']\s*\]\s*,)'
-        r'(\s*\[\s*["\'](?:methodology|method)["\']\s*,\s*["\']Metodolog(?:ía|ia)["\']\s*\])'
-    )
-    source, count = pattern.subn(
-        r'\1["workforceMix","Mix de plantilla"],\2', source, count=1
-    )
-    if count != 1:
-        raise ValueError(
-            "Parche HTML de insights: no se encontró la lista de pestañas para insertar Mix de plantilla"
-        )
-    return source
+    old = 'const TAB_KEYS=["Resumen","Restricciones","Horas contractuales","Cobertura diaria","Balance mañana/tarde","Ausencias","Fines de semana","Metodología"];'
+    new = 'const TAB_KEYS=["Resumen","Restricciones","Horas contractuales","Cobertura diaria","Balance mañana/tarde","Ausencias","Fines de semana","Mix de plantilla","Metodología"];'
+    return _replace_one(source, old, new, "pestaña Mix de plantilla")
 
 
 def _insert_mix_dispatch(source: str) -> str:
-    candidates = (
-        (
-            'else if(S.tab==="weekends") html=renderWeekends(F);',
-            'else if(S.tab==="weekends") html=renderWeekends(F);\n'
-            '  else if(S.tab==="workforceMix") html=renderWorkforceMix(F);',
-        ),
-        (
-            "else if(S.tab==='weekends') html=renderWeekends(F);",
-            "else if(S.tab==='weekends') html=renderWeekends(F);\n"
-            "  else if(S.tab==='workforceMix') html=renderWorkforceMix(F);",
-        ),
-        (
-            'else if(S.tab==="weekends")h=renderWeekends(F);',
-            'else if(S.tab==="weekends")h=renderWeekends(F);\n'
-            '  else if(S.tab==="workforceMix")h=renderWorkforceMix(F);',
-        ),
-        (
-            'case "weekends": return renderWeekends(F);',
-            'case "weekends": return renderWeekends(F);\n'
-            '    case "workforceMix": return renderWorkforceMix(F);',
-        ),
+    source = _replace_one(
+        source,
+        'const RENDERERS=[renderResumen,renderRestricciones,renderHoras,renderCobertura,renderBalance,renderAusencias,renderWeekends,renderMetodologia];',
+        'const RENDERERS=[renderResumen,renderRestricciones,renderHoras,renderCobertura,renderBalance,renderAusencias,renderWeekends,renderWorkforceMix,renderMetodologia];',
+        "lista de renderers",
     )
-    for old, new in candidates:
-        if old in source:
-            return source.replace(old, new, 1)
-
-    pattern = re.compile(r'(["\']weekends["\']\s*:\s*renderWeekends\s*,)')
-    source, count = pattern.subn(
-        r'\1 "workforceMix":renderWorkforceMix,', source, count=1
+    source = _replace_one(
+        source,
+        'panel.innerHTML = S.tab===7? renderMetodologia() : RENDERERS[S.tab](F);',
+        'panel.innerHTML = S.tab===8? renderMetodologia() : RENDERERS[S.tab](F);',
+        "índice de Metodología",
     )
-    if count != 1:
-        raise ValueError(
-            "Parche HTML de insights: no se encontró el enrutado de pestañas para Mix de plantilla"
-        )
     return source
 
 
@@ -131,24 +88,23 @@ function renderWorkforceMix(F){
 def patch_workforce_insights(source: str) -> str:
     """Mantiene en paridad HTML los insights de fines de semana y mix de plantilla."""
     old_chart = 'h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}))},{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}))},{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}))}],rot.map(r=>r.label),{h:390,dec:0})+`</div>`;'
-    new_chart = '''const totalEmployees=Math.max(employees.length,1);\n    rot.forEach(r=>r.pct=r.comp/totalEmployees*100);\n    h+=`<div class="wfv-weekend-grid"><div>`+chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}))},{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}))},{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}))}],rot.map(r=>r.label),{h:255,dec:0})+`</div><div><div class="chart-note">${t("Peso de la plantilla con fin de semana completo libre")}</div><div class="wfv-weekend-share">`+rot.map(r=>`<div class="wfv-weekend-share-row"><span>${esc(r.label)}</span><div class="wfv-weekend-share-track"><i style="width:${Math.min(100,Math.max(0,r.pct))}%"></i></div><strong>${r.comp} · ${pctText(r.pct)}</strong></div>`).join("")+`</div></div></div><div class="chart-note">${t("Porcentaje calculado sobre {n} empleado(s) incluidos en el rango contractual seleccionado.",{n:employees.length})}</div></div>`;'''
+    new_chart = '''const totalEmployees=Math.max(employees.length,1);\n    rot.forEach(r=>r.pct=r.comp/totalEmployees*100);\n    h+=chartLines([{name:t("Fin de semana completo"),color:"#2563eb",points:rot.map(r=>({y:r.comp}))},{name:t("Sábado libre"),color:"#22a447",points:rot.map(r=>({y:r.sab}))},{name:t("Domingo libre"),color:"#f59e0b",points:rot.map(r=>({y:r.dom}))}],rot.map(r=>r.label),{h:255,dec:0})+`</div>`;\n\n    h+=`<div class="block"><h3>${t("Magnitud del descanso por fin de semana")}</h3><div class="chart-note">${t("Empleados con sábado y domingo libres en cada fin de semana y peso que representan sobre la plantilla analizada.")}</div><div class="wfv-weekend-share">`+rot.map(r=>`<div class="wfv-weekend-share-row"><span>${esc(r.label)}</span><div class="wfv-weekend-share-track"><i style="width:${Math.min(100,Math.max(0,r.pct))}%"></i></div><strong>${r.comp} · ${pctText(r.pct)}</strong></div>`).join("")+`</div><div class="chart-note">${t("Base del porcentaje: {n} empleado(s) incluidos en el rango contractual seleccionado.",{n:employees.length})}</div></div>`;'''
     source = _replace_one(
-        source, old_chart, new_chart, "rotación y porcentaje de fin de semana"
+        source, old_chart, new_chart, "rotación y magnitud de fin de semana"
     )
 
     css = r'''
 <style id="wfv-workforce-insights-style">
-.wfv-weekend-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,1fr);gap:16px;align-items:start}
-.wfv-weekend-share{display:flex;flex-direction:column;gap:9px;margin-top:8px}
-.wfv-weekend-share-row{display:grid;grid-template-columns:minmax(85px,120px) minmax(100px,1fr) minmax(72px,92px);gap:8px;align-items:center;font-size:.82rem}
-.wfv-weekend-share-track,.wfv-mix-track{height:24px;background:#e2e8f0;border-radius:7px;overflow:hidden}
+.wfv-weekend-share{display:flex;flex-direction:column;gap:9px;margin-top:14px}
+.wfv-weekend-share-row{display:grid;grid-template-columns:minmax(100px,150px) minmax(160px,1fr) minmax(88px,115px);gap:10px;align-items:center;font-size:.84rem}
+.wfv-weekend-share-track,.wfv-mix-track{height:26px;background:#e2e8f0;border-radius:7px;overflow:hidden}
 .wfv-weekend-share-track i{display:block;height:100%;background:#2563eb;border-radius:7px}
 .wfv-weekend-share-row strong{text-align:right;font-variant-numeric:tabular-nums}
 .wfv-mix-bars{display:flex;flex-direction:column;gap:10px;margin-top:10px}
 .wfv-mix-row{display:grid;grid-template-columns:95px minmax(160px,1fr);gap:12px;align-items:center}
 .wfv-mix-contract{font-weight:700;text-align:right}
 .wfv-mix-fill{height:100%;min-width:42px;background:#2563eb;border-radius:7px;display:flex;align-items:center;padding:0 8px;color:#fff;font-size:.78rem;font-weight:700;white-space:nowrap}
-@media(max-width:900px){.wfv-weekend-grid{grid-template-columns:1fr}.wfv-weekend-share-row{grid-template-columns:90px 1fr 82px}}
+@media(max-width:700px){.wfv-weekend-share-row{grid-template-columns:85px minmax(90px,1fr) 82px}.wfv-mix-row{grid-template-columns:75px minmax(120px,1fr)}}
 </style>
 '''
     source = _replace_one(source, "</head>", css + "</head>", "estilos de insights")
@@ -163,8 +119,9 @@ def patch_workforce_insights(source: str) -> str:
         '  "Distribución por horas de contrato":"Distribution by contracted hours","Detalle del mix":"Mix detail",\n'
         '  "% plantilla":"% workforce","% horas contratadas":"% contracted hours",\n'
         '  "El porcentaje de plantilla se calcula sobre empleados con horas contractuales válidas. El porcentaje de horas muestra el peso de cada tipo de contrato sobre la capacidad contractual semanal total.":"Workforce percentage is calculated over employees with valid contracted hours. Hours percentage shows each contract type share of total weekly contracted capacity.",\n'
-        '  "Peso de la plantilla con fin de semana completo libre":"Share of workforce with a full weekend off",\n'
-        '  "Porcentaje calculado sobre {n} empleado(s) incluidos en el rango contractual seleccionado.":"Percentage calculated over {n} employee(s) included in the selected contract-hour range.",\n'
+        '  "Magnitud del descanso por fin de semana":"Weekend rest magnitude",\n'
+        '  "Empleados con sábado y domingo libres en cada fin de semana y peso que representan sobre la plantilla analizada.":"Employees with both Saturday and Sunday off for each weekend and their share of the analysed workforce.",\n'
+        '  "Base del porcentaje: {n} empleado(s) incluidos en el rango contractual seleccionado.":"Percentage base: {n} employee(s) included in the selected contract-hour range.",\n'
     )
     anchor = '  // ---- Metodología ----\n'
     source = _replace_one(source, anchor, translations + anchor, "traducciones")
