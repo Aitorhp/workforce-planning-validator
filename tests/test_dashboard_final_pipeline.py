@@ -1,4 +1,8 @@
-from dashboard_final import REQUIRED_DASHBOARD_RENDERERS, build_dashboard_source
+from dashboard_final import (
+    REQUIRED_DASHBOARD_RENDERERS,
+    REQUIRED_PRESENTATION_MARKERS,
+    build_dashboard_source,
+)
 
 
 def test_complete_dashboard_pipeline_preserves_all_renderers_and_compiles():
@@ -7,9 +11,15 @@ def test_complete_dashboard_pipeline_preserves_all_renderers_and_compiles():
     for renderer in REQUIRED_DASHBOARD_RENDERERS:
         assert renderer in source
 
+    for marker in REQUIRED_PRESENTATION_MARKERS:
+        assert marker in source
+
     assert "Mínimo de sábados o domingos libres" in source
     assert "weekend_flexible_distinct_weekends" in source
     assert "No combinable sin reutilizar días" in source
+    assert 'st.markdown("#### Magnitud del descanso por fin de semana")' in source
+    assert 'yaxis_title="% de plantilla con fin de semana completo libre"' in source
+    assert "Base del porcentaje:" in source
     assert "tabs = st.tabs" in source
 
     compile(source, "app.py", "exec")
