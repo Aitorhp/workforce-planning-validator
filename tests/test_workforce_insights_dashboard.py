@@ -38,7 +38,7 @@ def test_prepare_workforce_mix_uses_latest_contract_and_store_filter():
     assert mix.iloc[0]["Empleados"] == 1
 
 
-def test_source_patch_adds_mix_tab_and_compact_weekend_percentage_chart():
+def test_source_patch_adds_mix_tab_and_explicit_weekend_magnitude_chart():
     source = (
         "from validator_engine import (\n    x,\n)\n"
         "def placeholder():\n"
@@ -53,6 +53,8 @@ def test_source_patch_adds_mix_tab_and_compact_weekend_percentage_chart():
 
     assert "height=255" in patched
     assert "porcentaje_plantilla" in patched
+    assert 'st.markdown("#### Magnitud del descanso por fin de semana")' in patched
+    assert "Base del porcentaje:" in patched
     assert "def render_workforce_mix(frames):" in patched
     assert '"Mix de plantilla"' in patched
     assert "with tabs[7]: render_workforce_mix(frames)" in patched
