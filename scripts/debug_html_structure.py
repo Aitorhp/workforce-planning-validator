@@ -6,7 +6,7 @@ import gzip
 
 from build_distributable_html import read_payload
 
-
+# Diagnóstico temporal: contexto real de navegación del payload HTML base.
 def main() -> None:
     source = gzip.decompress(base64.b64decode(read_payload(), validate=True)).decode("utf-8")
     print("\n--- CONTEXTO DE NAVEGACION DEL HTML BASE ---")
