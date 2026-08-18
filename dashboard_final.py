@@ -23,6 +23,12 @@ REQUIRED_DASHBOARD_RENDERERS = (
     "def render_workforce_mix(frames):",
 )
 
+REQUIRED_PRESENTATION_MARKERS = (
+    'st.markdown("#### Magnitud del descanso por fin de semana")',
+    'st.plotly_chart(fig_pct, use_container_width=True)',
+    '"Mix de plantilla"',
+)
+
 
 def build_dashboard_source() -> str:
     """Compose every presentation layer and return the executable dashboard source."""
@@ -49,6 +55,13 @@ def build_dashboard_source() -> str:
         raise RuntimeError(
             "La composición final del dashboard ha perdido renderizadores requeridos: "
             + ", ".join(missing)
+        )
+
+    missing_markers = [marker for marker in REQUIRED_PRESENTATION_MARKERS if marker not in source]
+    if missing_markers:
+        raise RuntimeError(
+            "La composición final del dashboard no contiene elementos visuales obligatorios: "
+            + ", ".join(missing_markers)
         )
 
     compile(source, "app.py", "exec")
