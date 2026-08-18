@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 
 from weekend_html_patch import patch_weekend_assignment
+from workforce_insights_html_patch import patch_workforce_insights
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "html_assets"
@@ -260,6 +261,7 @@ def patched_payload(payload: str) -> tuple[str, bytes]:
     compressed = base64.b64decode(payload, validate=True)
     source = gzip.decompress(compressed).decode("utf-8")
     source = patch_weekend_assignment(source)
+    source = patch_workforce_insights(source)
     source = patch_contract_hours_heatmap(source)
     source = patch_collapsible_sidebar(source)
     source_bytes = source.encode("utf-8")
