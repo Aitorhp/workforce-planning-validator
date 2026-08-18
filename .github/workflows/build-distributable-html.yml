@@ -6,6 +6,7 @@ on:
       - 'html_assets/reference_payload_*.js'
       - 'scripts/build_distributable_html.py'
       - 'scripts/weekend_html_patch.py'
+      - 'scripts/workforce_insights_html_patch.py'
       - '.github/workflows/build-distributable-html.yml'
   workflow_dispatch:
 
