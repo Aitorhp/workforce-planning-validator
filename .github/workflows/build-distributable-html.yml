@@ -29,16 +29,41 @@ jobs:
           fetch-depth: 0
 
       - name: Generate single-file HTML
-        run: python scripts/build_distributable_html.py
+        id: build_html
+        shell: bash
+        run: |
+          set +e
+          python scripts/build_distributable_html.py > html_build.log 2>&1
+          status=$?
+          cat html_build.log
+          if [ "$status" -ne 0 ]; then
+            {
+              echo '# Error de generación del HTML distribuible'
+              echo
+              echo 'La generación automática ha fallado. Este fichero se versiona temporalmente para diagnosticar el parche real aplicado a los payloads.'
+              echo
+              echo '```text'
+              cat html_build.log
+              echo '```'
+            } > HTML_BUILD_ERROR.md
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add HTML_BUILD_ERROR.md
+            git commit -m 'Registrar error de generación HTML' || true
+            git push origin HEAD:${{ github.ref_name }} || true
+            exit "$status"
+          fi
+          rm -f HTML_BUILD_ERROR.md
 
       - name: Commit regenerated distributable
         run: |
-          if git diff --quiet -- validador_distribuible.html; then
+          if git diff --quiet -- validador_distribuible.html HTML_BUILD_ERROR.md; then
             echo 'Generated HTML is already up to date.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add validador_distribuible.html
+          if [ -f HTML_BUILD_ERROR.md ]; then git add HTML_BUILD_ERROR.md; else git rm --cached HTML_BUILD_ERROR.md 2>/dev/null || true; fi
           git commit -m 'Regenerar HTML distribuible'
           git push origin HEAD:${{ github.ref_name }}
