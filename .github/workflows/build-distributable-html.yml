@@ -7,6 +7,7 @@ on:
       - 'scripts/build_distributable_html.py'
       - 'scripts/weekend_html_patch.py'
       - 'scripts/workforce_insights_html_patch.py'
+      - 'scripts/debug_html_structure.py'
       - '.github/workflows/build-distributable-html.yml'
   workflow_dispatch:
 
@@ -37,6 +38,7 @@ jobs:
           status=$?
           cat html_build.log
           if [ "$status" -ne 0 ]; then
+            python scripts/debug_html_structure.py >> html_build.log 2>&1 || true
             {
               echo '# Error de generación del HTML distribuible'
               echo
