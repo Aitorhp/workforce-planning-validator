@@ -7,13 +7,7 @@ def _source():
 const I18N_EN={
   // ---- Metodología ----
 };
-const tabs=[["summary","Resumen"],["weekends","Fines de semana"],["methodology","Metodología"]];
-function renderTab(){
-  let html="";
-  if(S.tab==="summary") html=renderSummary(F);
-  else if(S.tab==="weekends") html=renderWeekends(F);
-  else html=renderMethodology(F);
-}
+const TAB_KEYS=["Resumen","Restricciones","Horas contractuales","Cobertura diaria","Balance mañana/tarde","Ausencias","Fines de semana","Metodología"];
 function renderWeekends(F){
   const employees=[];
   const rot=[];
@@ -22,23 +16,30 @@ function renderWeekends(F){
   return h;
 }
 /* ---------- Metodología ---------- */
+function renderMetodologia(){return "method";}
+const RENDERERS=[renderResumen,renderRestricciones,renderHoras,renderCobertura,renderBalance,renderAusencias,renderWeekends,renderMetodologia];
+function renderTab(){
+  const F=S.frames; const panel=document.getElementById("panel");
+  panel.innerHTML = S.tab===7? renderMetodologia() : RENDERERS[S.tab](F);
+}
 </script></body></html>
 '''
 
 
-def test_html_patch_adds_compact_weekend_percentage_visual():
+def test_html_patch_adds_compact_weekend_magnitude_visual():
     patched = patch_workforce_insights(_source())
     assert '{h:255,dec:0}' in patched
     assert 'wfv-weekend-share' in patched
-    assert 'Peso de la plantilla con fin de semana completo libre' in patched
-    assert 'Porcentaje calculado sobre {n} empleado(s)' in patched
+    assert 'Magnitud del descanso por fin de semana' in patched
+    assert 'Base del porcentaje: {n} empleado(s)' in patched
 
 
-def test_html_patch_adds_workforce_mix_tab_and_renderer():
+def test_html_patch_adds_workforce_mix_tab_and_renderer_using_real_navigation_shape():
     patched = patch_workforce_insights(_source())
-    assert '["workforceMix","Mix de plantilla"]' in patched
+    assert '"Fines de semana","Mix de plantilla","Metodología"' in patched
     assert 'function renderWorkforceMix(F)' in patched
-    assert 'S.tab==="workforceMix"' in patched
+    assert 'renderWeekends,renderWorkforceMix,renderMetodologia' in patched
+    assert 'S.tab===8? renderMetodologia()' in patched
     assert 'Distribución por horas de contrato' in patched
     assert '% horas contratadas' in patched
 
@@ -47,4 +48,5 @@ def test_html_patch_injects_required_styles_and_translations():
     patched = patch_workforce_insights(_source())
     assert 'wfv-workforce-insights-style' in patched
     assert '"Mix de plantilla":"Workforce mix"' in patched
+    assert '"Magnitud del descanso por fin de semana":"Weekend rest magnitude"' in patched
     assert patched.count('function renderWorkforceMix(F)') == 1
