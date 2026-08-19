@@ -3,8 +3,8 @@
 
 El HTML funcional base se conserva comprimido en los fragmentos
 ``html_assets/reference_payload_*.js``. Antes de volver a comprimirlo, este
-generador aplica las extensiones de presentación que deben mantenerse en
-paridad con Streamlit.
+generador aplica las extensiones de presentación y de fuente de datos que deben
+mantenerse en paridad con Streamlit.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import hashlib
 import re
 from pathlib import Path
 
+from bundle_html_patch import patch_bundle_source
 from weekend_html_patch import patch_weekend_assignment
 from workforce_insights_html_patch import patch_workforce_insights
 
@@ -167,12 +168,7 @@ def patch_contract_hours_heatmap(source: str) -> str:
 
 
 def patch_collapsible_sidebar(source: str) -> str:
-    """Añade un control plegable al panel lateral del HTML autónomo.
-
-    La localización del panel se hace en tiempo de ejecución a partir de su
-    contenido y geometría para no depender de nombres de clases internos.
-    Streamlit ya ofrece de forma nativa el control equivalente para su sidebar.
-    """
+    """Añade un control plegable al panel lateral del HTML autónomo."""
 
     css = r'''
 <style id="wfv-collapsible-sidebar-style">
@@ -260,12 +256,12 @@ def patch_collapsible_sidebar(source: str) -> str:
 def patched_payload(payload: str) -> tuple[str, bytes]:
     compressed = base64.b64decode(payload, validate=True)
     source = gzip.decompress(compressed).decode("utf-8")
+    source = patch_bundle_source(source)
     source = patch_weekend_assignment(source)
     source = patch_workforce_insights(source)
     source = patch_contract_hours_heatmap(source)
     source = patch_collapsible_sidebar(source)
     source_bytes = source.encode("utf-8")
-    # mtime=0 hace que el artefacto sea reproducible entre ejecuciones.
     compressed_patched = gzip.compress(source_bytes, mtime=0)
     return base64.b64encode(compressed_patched).decode("ascii"), source_bytes
 
