@@ -21,8 +21,9 @@ Si no conoces el proyecto, sigue este orden:
 11. [HTML_PARITY.md](HTML_PARITY.md) — arquitectura del HTML autónomo, generador, payloads, parches y regla de paridad.
 12. [NEW_DATA_SOURCE_GUIDE.md](NEW_DATA_SOURCE_GUIDE.md) — diseño conceptual del adaptador y qué módulos deben conservarse.
 13. [DATA_SOURCE_MAPPING_TEMPLATE.md](DATA_SOURCE_MAPPING_TEMPLATE.md) — matriz de equivalencia preparada para una nueva fuente.
-14. [TESTING_AND_GOLDEN_MASTER.md](TESTING_AND_GOLDEN_MASTER.md) — cobertura actual, huecos, Golden Master y 31 casos frontera.
-15. [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md) — duplicidad, legado, acoplamientos y recomendaciones separadas del estado actual.
+14. [BUNDLE_DATA_SOURCE.md](BUNDLE_DATA_SOURCE.md) — implementación y mapeo semántico de la nueva fuente consolidada `bundle`.
+15. [TESTING_AND_GOLDEN_MASTER.md](TESTING_AND_GOLDEN_MASTER.md) — cobertura actual, huecos, Golden Master y 31 casos frontera.
+16. [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md) — duplicidad, legado, acoplamientos y recomendaciones separadas del estado actual.
 
 ## Convención de evidencia
 
@@ -41,6 +42,7 @@ Las recomendaciones no deben utilizarse como especificación para reproducir res
 |---|---|
 | Lectura JSON | `workforce_validator/io.py` |
 | Detección/filtrado de origen de horario | `workforce_validator/schedule_sources.py` |
+| Adaptación de fuentes | `workforce_validator/adapters/` + `workforce_validator/input_sources.py` |
 | Extracción al modelo interno | `workforce_validator/extraction.py` |
 | Modelos internos | `workforce_validator/models.py` |
 | Reglas | `workforce_validator/rules/` + `config/rules.json` |
@@ -104,10 +106,10 @@ HTML autónomo
   la paridad debe comprobarse explícitamente.
 ```
 
-La frontera recomendada para una futura fuente es:
+La frontera implementada para la nueva fuente es:
 
 ```text
-NUEVA FUENTE -> ADAPTADOR -> MODELO CANÓNICO -> MOTOR EXISTENTE
+BUNDLE -> BundleAdapter -> CanonicalDataset -> MOTOR EXISTENTE
 ```
 
-No se ha realizado ese refactor en esta fase. Esta documentación describe primero lo que el repositorio hace hoy y separa cualquier propuesta futura.
+La ruta histórica permanece disponible como referencia Golden Master mediante el pipeline actual y `CurrentJsonAdapter`.
