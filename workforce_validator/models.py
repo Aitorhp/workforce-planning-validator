@@ -40,6 +40,17 @@ class Incident:
 
 
 @dataclass
+class CanonicalDataset:
+    shifts: list[ShiftRow]
+    absences: list[AbsenceDay]
+    employee_months: dict[tuple[Any, Any, str], Any]
+    employee_presence_dates: dict[tuple[Any, Any], set[date]]
+    data_dates: set[date]
+    schedule_source: str
+    manual_edit_filter: str = "all"
+
+
+@dataclass
 class ValidationResult:
     source_data: dict[str, Any]
     schedule_source: str
