@@ -4,10 +4,40 @@ from typing import Any
 from workforce_validator.config import SETTINGS, ValidatorSettings
 from workforce_validator.dates import collect_data_dates
 from workforce_validator.extraction import extract_data
-from workforce_validator.models import ValidationResult
+from workforce_validator.models import CanonicalDataset, ValidationResult
 from workforce_validator.schedule_sources import filter_schedule_data
 from workforce_validator.summary import analyze_shifts
 from workforce_validator.weekly_hours import analyze_weekly_hours
+
+
+def run_canonical_validation(
+    dataset: CanonicalDataset,
+    source_data: dict[str, Any] | None = None,
+    settings: ValidatorSettings = SETTINGS,
+) -> ValidationResult:
+    """Run the unchanged business engine over an already-normalized dataset."""
+    summaries, incidents = analyze_shifts(dataset.shifts, dataset.employee_months, settings)
+    weekly = analyze_weekly_hours(
+        dataset.shifts,
+        dataset.employee_months,
+        dataset.data_dates,
+        dataset.absences,
+        dataset.employee_presence_dates,
+        settings,
+    )
+    return ValidationResult(
+        source_data or {},
+        dataset.schedule_source,
+        dataset.shifts,
+        dataset.employee_months,
+        dataset.absences,
+        dataset.employee_presence_dates,
+        summaries,
+        incidents,
+        weekly,
+        dataset.data_dates,
+        dataset.manual_edit_filter,
+    )
 
 
 def run_validation(
