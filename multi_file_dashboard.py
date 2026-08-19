@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def apply_multi_file_support(source: str) -> str:
-    """Adapta la interfaz Streamlit para validar uno o dos JSON mensuales."""
+    """Adapta la interfaz Streamlit para un bundle o uno/dos JSON mensuales."""
     source = source.replace(
         "    load_json_bytes,\n",
         "    load_json_bytes,\n    combine_planning_documents,\n",
@@ -54,17 +54,17 @@ except Exception as exc:
 '''
     new_upload = '''st.sidebar.title("Validador")
 uploaded_files = st.sidebar.file_uploader(
-    "Subir una o dos planificaciones JSON/TXT",
+    "Subir bundle o planificaciones JSON/TXT",
     type=["json", "txt"],
     accept_multiple_files=True,
-    help="Puede cargar un único mes o dos meses consecutivos de la misma tienda. Los periodos no pueden solaparse.",
+    help="Carga un único bundle consolidado o uno/dos meses consecutivos del formato anterior. No mezcles ambos formatos.",
 )
 if not uploaded_files:
     st.title("Validador de planificaciones")
-    st.info("Sube uno o dos ficheros para detectar los orígenes de horarios disponibles.")
+    st.info("Sube un bundle o uno/dos ficheros para detectar los orígenes de horarios disponibles.")
     st.stop()
 if len(uploaded_files) > 2:
-    st.error("Solo se admite un máximo de dos ficheros.")
+    st.error("Solo se admite un bundle o un máximo de dos ficheros del formato anterior.")
     st.stop()
 
 file_payloads = tuple(uploaded.getvalue() for uploaded in uploaded_files)
@@ -72,7 +72,7 @@ file_names = [uploaded.name for uploaded in uploaded_files]
 try:
     data, source_stats = parse_files(file_payloads)
 except Exception as exc:
-    st.error(f"No se han podido combinar los ficheros: {exc}")
+    st.error(f"No se han podido preparar los ficheros: {exc}")
     st.stop()
 '''
     if old_upload not in source:
@@ -92,7 +92,7 @@ for file_name in file_names:
 if result.data_dates:
     period_start = min(result.data_dates)
     period_end = max(result.data_dates)
-    st.sidebar.caption(f"Periodo combinado: {period_start:%d/%m/%Y} - {period_end:%d/%m/%Y}")
+    st.sidebar.caption(f"Periodo analizado: {period_start:%d/%m/%Y} - {period_end:%d/%m/%Y}")
 render_rules_panel()'''
     if old_file_caption not in source:
         raise RuntimeError("No se encontró el bloque de identificación de fichero esperado.")
@@ -101,7 +101,7 @@ render_rules_panel()'''
     old_source_box = '''f'<div class="source-box"><b>Origen analizado:</b> {SCHEDULE_SOURCES[selected_source]} '
     f'(<code>{selected_source}</code>). Todas las incidencias, horas y visualizaciones corresponden exclusivamente a esta fuente.</div>','''
     new_source_box = '''f'<div class="source-box"><b>Origen analizado:</b> {SCHEDULE_SOURCES[selected_source]} '
-    f'(<code>{selected_source}</code>). Se han combinado {len(uploaded_files)} fichero(s) de la misma tienda; '
+    f'(<code>{selected_source}</code>). Se han cargado {len(uploaded_files)} fichero(s); '
     f'todas las incidencias, horas y visualizaciones corresponden al periodo completo.</div>','''
     if old_source_box in source:
         source = source.replace(old_source_box, new_source_box, 1)
