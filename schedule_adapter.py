@@ -1,17 +1,16 @@
-"""Compatibilidad con la entrada Streamlit de la version anterior."""
+"""Compatibilidad con la entrada Streamlit y fuentes de planificacion."""
 from __future__ import annotations
 
 from workforce_validator.config import SETTINGS
 from workforce_validator.dataframes import result_dataframes
-from workforce_validator.engine import run_validation
 from workforce_validator.excel import build_excel_bytes
-from workforce_validator.io import load_json_bytes
-from workforce_validator.multi_file import combine_planning_documents
-from workforce_validator.schedule_sources import (
-    MANUAL_EDIT_FILTERS,
-    SCHEDULE_SOURCES,
-    detect_schedule_sources,
+from workforce_validator.input_sources import (
+    combine_planning_inputs as combine_planning_documents,
+    detect_input_schedule_sources as detect_schedule_sources,
+    run_input_validation as run_validation,
 )
+from workforce_validator.io import load_json_bytes
+from workforce_validator.schedule_sources import MANUAL_EDIT_FILTERS, SCHEDULE_SOURCES
 
 MAX_CONSECUTIVE_DAYS = int(SETTINGS.max_consecutive_days.limit)
 MAX_SHIFT_HOURS = SETTINGS.max_shift_hours.limit
